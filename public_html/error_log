@@ -1,0 +1,6 @@
+[08-Nov-2023 18:09:24 UTC] PHP Warning:  include(/vendor/autoload.php): failed to open stream: No such file or directory in /home/travsavers/public_html/stripe_checkout.php on line 5
+[08-Nov-2023 18:09:24 UTC] PHP Warning:  include(): Failed opening '/vendor/autoload.php' for inclusion (include_path='.:/opt/cpanel/ea-php73/root/usr/share/pear') in /home/travsavers/public_html/stripe_checkout.php on line 5
+[08-Nov-2023 18:09:24 UTC] PHP Fatal error:  Uncaught Error: Class 'Stripe\StripeClient' not found in /home/travsavers/public_html/stripe_checkout.php:8
+Stack trace:
+#0 {main}
+  thrown in /home/travsavers/public_html/stripe_checkout.php on line 8

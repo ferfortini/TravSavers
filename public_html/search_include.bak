@@ -1,0 +1,307 @@
+<? 
+
+include('inc/db_connect.php');
+
+$locquery = mysqli_query($con, "SELECT * FROM locations WHERE id = '$loc' ");
+$rowloc = mysqli_fetch_array($locquery);
+
+
+$desc = $rowloc['pagedesc'];
+$keywords = $rowloc['pagekeywords'];
+$lp2text = $rowloc['lp2text'];
+if(isset($lp2text)) { $_SESSION['lp2text'] = $lp2text; } else {}
+$city = $rowloc['city'];
+$st = $rowloc['st'];
+
+if (isset($LPKW1)) { 
+
+
+ } else { }
+if (isset($LPKW1)) { $uckw = ucwords ($LPKW1); $_SESSION['uckw'] = $uckw; $uckwsing = ucwords ($LPKW1sing); $pagetitle = $city." ".$uckw." - Save Big On ".$uckw." In ".$city.", ".$st; 
+
+} else {$pagetitle = $rowloc['pagetitle'];  $LPKW1sing = "vacation"; $uckw = "Vacation Packages";  $_SESSION['uckw'] = "Vacation Packages"; $uckws = "Vacation Package";}
+
+
+include ('inc/header.php'); 
+
+?>
+<main>
+        <!-- Title and Widget -->
+        <section id="title" class="border-top pt-0 mb-8" style="background-image:url('/assets/img/<? echo $back; ?>'); background-repeat: no-repeat; background-position: center top;">
+            <div class="container" >
+          
+<div class="row g-0 align-items-center">
+                        <!-- Content -->
+                
+
+        <div class="mb-4 pt-2 pt-xl-0 pb-xl-0">
+<!--
+<div class="img-info img-info-left ms-12 ms-lg-10" style="float:right; max-width:50%;">
+  
+  <br>
+  <figure class="img-info-thumbnail rounded">
+        <img src="../assets/img/<? echo $rowloc['featuredimage']; ?>" class="img-fluid" alt="Save On <? echo $rowloc['city'];?> Vacations" style="float:right; max-height:200px;">
+    </figure>
+<br>
+    <div class="img-info-body shadow"  style="padding:3px;  ">
+     
+        <p class="fsm-6 text-secondary mb-0"><b>Save $200-$500 or More On Your Choice Of <? echo $rowloc['city'];?> Hotels!</b></p>
+    </div>
+</div>
+-->
+                             <h1 class="display-7 fw-bold mb-3 mt-2 text-body-emphasis" ><span style="color:#dddddd;"> <? echo $rowloc['city'];?> <? echo $uckw; ?></span></h1>
+<h4><span style="color:#bbbbbb;"> 3-5 Star Hotels, As Low As $25/Night!</span></h4>
+<p class='fs-6 mb-0 text-secondary' ><span style="color:#dddddd;"> Save <b>$200-$500 or more</b> when you book your <b><? echo $rowloc['city'];?> <? echo $LPKW1sing; ?></b> with TravSavers!  Promo packages also <b>include dining/entertainment!</b>!</span>  
+<br>
+<a href='#mdlWhyTravSavers' data-bs-toggle='modal'>How Can We Offer These Prices?</a>
+ </p>
+
+</div>
+                    
+</div>
+<h3 style="color:#dddddd;">Search Great Deals In <? echo $rowloc['city']; ?>!</h3>
+ <!-- Find tours -->
+<? 
+if (isset($_GET['msg'])) { 
+
+if  ($_GET['msg'] == '1' ) { echo "<div class='alert alert-danger alert-dismissible fade show' role='alert'>Check-Out Date Must Be Later Than Check-In Date</div>"; } 
+elseif  ($_GET['msg'] == '2' ) { echo "<div class='alert alert-danger alert-dismissible fade show' role='alert'>Please Select Number Of Adults</div>"; } 
+elseif  ($_GET['msg'] == '3' ) { echo "<div class='alert alert-danger alert-dismissible fade show' role='alert'>For Bookings Within 7 Days, Please Call (866) 540-8956 For Assistance</div>"; } 
+elseif  ($_GET['msg'] == '4' ) { echo "<div class='alert alert-danger alert-dismissible fade show' role='alert'>Our Packages Require a Two Night Minimum Stay</div>"; } 
+elseif  ($_GET['msg'] == '8' ) { echo "<div class='alert alert-danger alert-dismissible fade show' role='alert'>Your search didn't return any results, please try again.  For our guests' comfort and convenience, we only display 3 to 5 star properties with flexible cancellation policies.</div>"; } 
+
+else {}
+
+
+
+} else {}
+?>
+
+                <div id="findTour" class="find-tour shadow rounded-3 p-3 bg-body border border-light-subtle mb-8">
+                    <form action="https://travsavers.com/property-search.php?loc=<? echo $loc; ?>" method="post">
+                        <div class="row g-3">
+                            <div class="col-lg-20">
+                                <div class="row g-3">
+                                    <div class="col-24 col-lg-12 col-md-8">
+                                        <!-- When -->
+                                        <div class="control-icon control-icon-lg departure-date">
+                                            <label class="ti ti-calendar-event cursor-pointer text-secondary" for="CheckIn"></label>
+                                            <input type="date" class="form-control form-control-lg bg-transparent rounded border-0 " autocomplete="off" placeholder="Check-In" name="CheckIn" id="CheckIn" data-input="" required>
+                                        </div>
+                                        <!-- /When -->
+                                    </div>
+                                  <div class="col-24 col-lg-12 col-md-8">
+                                        <!-- When -->
+                                        <div class="control-icon control-icon-lg departure-date">
+                                            <label class="ti ti-calendar-event cursor-pointer text-secondary" for="CheckOut"></label>
+                                            <input type="date" class="form-control form-control-lg bg-transparent rounded border-0 " autocomplete="off" placeholder="Check-Out" name="CheckOut" id="CheckOut" data-input="" required>
+                                        </div>
+
+                                        <!-- /When -->
+                                    </div>
+
+                                    <div class="col-9 col-lg-4 col-md-5">
+                                        <!-- When -->
+                                        <select class="form-select shadow-sm" name="Adults" aria-label="# of Adults" required>
+        <option value="2" selected>2 Adults</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+ <option value="4">4</option>
+    </select>
+                                        <!-- /When -->
+                                    </div>
+                                    <div class="col-10 col-lg-5 col-md-5">
+                                        <!-- When -->
+<script type="application/javascript">
+
+function yesnoCheck(that) {
+    if (that.value == "1") {
+  alert("Please Enter Children's Ages");
+        document.getElementById("ageOne").style.display = "block";
+    } else {
+        document.getElementById("ageOne").style.display = "none";
+    }
+ if (that.value == "2") {
+  alert("Please Enter Children's Ages");
+        document.getElementById("ageOne").style.display = "block";
+ document.getElementById("ageTwo").style.display = "block";
+    } else {
+        document.getElementById("ageTwo").style.display = "none";
+    }
+if (that.value == "3") {
+  alert("Please Enter Children's Ages");
+        document.getElementById("ageOne").style.display = "block";
+ document.getElementById("ageTwo").style.display = "block";
+ document.getElementById("ageThree").style.display = "block";
+    } else {
+        document.getElementById("ageThree").style.display = "none";
+    }
+if (that.value == "4") {
+  alert("Please Enter Children's Ages");
+        document.getElementById("ageOne").style.display = "block";
+ document.getElementById("ageTwo").style.display = "block";
+ document.getElementById("ageThree").style.display = "block";
+ document.getElementById("ageFour").style.display = "block";
+    } else {
+        document.getElementById("ageFour").style.display = "none";
+    }
+
+
+}
+
+</script>
+
+ <select onchange="yesnoCheck(this);" class="form-select shadow-sm" name="Children" aria-label="# of Children">
+        <option value="0" selected>Children</option>
+         <option value="0">0</option>
+  <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+ <option value="4">4</option>
+    </select>
+
+
+<div id="ageOne" style="display: none;">
+<b style="font-size:55%;">Child 1 Age:</b><br>
+    <select name="age1" class="form-select shadow-sm">
+<option value="">-</option>    
+    <option value="1">0-12mo</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+    <option value="6">6</option>
+    <option value="7">7</option>
+    <option value="8">8</option>
+    <option value="9">9</option>
+    <option value="10">10</option>
+    <option value="11">11</option>
+    <option value="12">12</option>
+    <option value="13">13</option>
+    <option value="14">14</option>
+    <option value="15">15</option>
+    <option value="16">16</option>
+    <option value="17">17</option>
+</select>
+</div>
+
+<div id="ageTwo" style="display: none;">
+<b style="font-size:55%;">Child 2 Age:</b><br>
+    <select name="age2" class="form-select shadow-sm">
+<option value="">-</option>    
+<option value="1">0-12mo</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+    <option value="6">6</option>
+    <option value="7">7</option>
+    <option value="8">8</option>
+    <option value="9">9</option>
+    <option value="10">10</option>
+    <option value="11">11</option>
+    <option value="12">12</option>
+    <option value="13">13</option>
+    <option value="14">14</option>
+    <option value="15">15</option>
+    <option value="16">16</option>
+    <option value="17">17</option>
+</select>
+</div>
+
+<div id="ageThree" style="display: none;">
+<b style="font-size:55%;">Child 3 Age:</b><br>
+    <select name="age3" class="form-select shadow-sm">
+<option value="">-</option>    
+<option value="1">0-12mo</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+    <option value="6">6</option>
+    <option value="7">7</option>
+    <option value="8">8</option>
+    <option value="9">9</option>
+    <option value="10">10</option>
+    <option value="11">11</option>
+    <option value="12">12</option>
+    <option value="13">13</option>
+    <option value="14">14</option>
+    <option value="15">15</option>
+    <option value="16">16</option>
+    <option value="17">17</option>
+</select>
+</div>
+
+<div id="ageFour" style="display: none;">
+<b style="font-size:55%;">Child 4 Age:</b><br>
+    <select name="age4" class="form-select shadow-sm">
+ <option value="">-</option>    
+<option value="1">0-12mo</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+    <option value="6">6</option>
+    <option value="7">7</option>
+    <option value="8">8</option>
+    <option value="9">9</option>
+    <option value="10">10</option>
+    <option value="11">11</option>
+    <option value="12">12</option>
+    <option value="13">13</option>
+    <option value="14">14</option>
+    <option value="15">15</option>
+    <option value="16">16</option>
+    <option value="17">17</option>
+</select>
+</div>
+
+                                        <!-- /When -->
+
+</div>
+
+                               
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <!-- Button -->
+                                <div class="check-button">
+                                    <button id="Search" type="submit" onclick="showDiv()" class="btn btn-lg btn-primary w-100 rounded">
+                                        <i class="ti ti-search"></i>
+                                        <span>Search! <div id="loadingGif" style="display:none"><img src="/assets/img/spinner.png" style="max-width:50px;"></div></span>
+
+                                    </button>
+ 
+
+                                </div>
+
+            </div>
+                                <!-- /Button -->
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <!-- /Find tours -->
+
+<? 
+
+include("inc/savers_include.php"); 
+
+?>
+
+            </div>
+        </section>
+        <!-- /Title and Widget -->
+<? 
+/*
+include ('inc/where_to_stay.php'); 
+*/
+?>
+    </main>
+<? include("inc/footer.php"); ?>

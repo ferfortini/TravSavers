@@ -1,0 +1,180 @@
+<? 
+
+include('inc/db_connect.php');
+
+// LOCATION VARS
+
+$loc = $_GET['loc'];
+
+$cityquery = mysqli_query($con,"SELECT * FROM locations WHERE id = '$loc' ") or die ('Unable to execute query. '. mysqli_error($con));
+$rowc = mysqli_fetch_array($cityquery);
+
+$city = $rowc['city'];
+$state = $rowc['state'];
+$intro = $rowc['intro'];
+$searchurl = $rowc['searchurl'];
+$placeid = $rowc['placeid'];
+$pagetitle = $rowc['pagetitle'];
+$desc =  $rowc['pagedesc'];
+$keywords =  $rowc['pagekeywords'];
+$featimage = $rowc['featuredimage'];
+$placeid = $rowc['placeid'];
+$gifts = $rowc['gifts'];
+$giftshort = $rowc['giftshort'];
+$giftshort2 = $rowc['giftshort2'];
+$hoteltable = $rowc['hoteltable'];
+$logo = $rowc['logo'];
+
+if ( isset ($_POST['CheckIn']) ) {
+
+$slcid = $_POST['CheckIn']; 
+if (isset($_POST['CheckOut'])) { $slcod = $_POST['CheckOut']; } else { $slcod = 'na'; }
+if (isset($_POST['Adults'])) { $sladults = $_POST['Adults']; } else { $sladults = 'na'; }
+if (isset($_POST['Children'])) { $slchildren = $_POST['Children']; } else { $slchildren = 'na'; }
+
+$logquery = mysqli_query($con,"INSERT INTO search_log (id, searchdatetime, requestcidate, requestcodate, adults, children, location) VALUES ('NULL', NOW(), '$slcid', '$slcod','$sladults','$slchildren','$loc')") or die ('Unable to execute query. '. mysqli_error($con));
+
+$cidd = strtotime( $_POST['CheckIn'] );
+$codd = strtotime ( $_POST['CheckOut'] );
+
+
+$dddiff = $codd - $cidd;
+$actualdd = round($dddiff / (60 * 60 * 24));
+if ($actualdd < 2 ) {
+ header("Location: https://travsavers.com/$searchurl?msg=4");
+} else {}
+
+if ( strtotime( $_POST['CheckIn'] ) > strtotime ( $_POST['CheckOut'] ) ) { 
+
+ header("Location: https://travsavers.com/$searchurl?msg=1");
+} else {}
+
+// CHECK ADULTS
+if ( $_POST['Adults'] < 1) { 
+
+ header("Location: https://travsavers.com/$searchurl?msg=2");
+} else {}
+
+$seconds_to_expire = strtotime($_POST['CheckIn']) - time();
+if ($seconds_to_expire < 7*86400) {
+header("Location: https://travsavers.com/$searchurl?msg=3");
+ } else {
+ }
+} else {
+
+if (isset($_SESSION['CheckIn']) ) { } else {
+header("Location: https://travsavers.com/");
+}
+
+}
+
+
+
+include('api_auth.php');
+
+
+
+// DATE VALIDATION
+
+
+
+
+// ***** NEED NEW SESSION ID FOR EACH SEARCH
+
+$sid = session_id();
+$_SESSION['sessioncheck'] = $sid;
+
+if ( isset ($_POST['CheckIn']) ) {
+include ('new_hotel_api_call.php');
+} else {}
+if (!isset($_GET['src']) ) { $_GET['src'] = 'none'; } else {}
+if ( $_GET['src'] == 'stars' ) { $pricequery = mysqli_query($con,"SELECT * FROM vegas_api_temp WHERE sessionid = '$sid' AND rating >= 3 AND propid != '359994' AND propid != '478558' AND refundable = '1' ORDER BY rating DESC, promoprice ASC, bigsave DESC ") or die ('Unable to execute query. '. mysqli_error($con)); }
+elseif ( $_GET['src'] == 'savings' ) { $pricequery = mysqli_query($con,"SELECT * FROM vegas_api_temp WHERE sessionid = '$sid' AND rating >= 3 AND propid != '359994' AND propid != '478558' AND refundable = '1' ORDER BY bigsave DESC, rating DESC ") or die ('Unable to execute query. '. mysqli_error($con)); }
+elseif ( $_GET['src'] == 'high' ) { $pricequery = mysqli_query($con,"SELECT * FROM vegas_api_temp WHERE sessionid = '$sid' AND rating >= 3 AND propid != '359994' AND propid != '478558' AND refundable = '1' ORDER BY promoprice DESC, bigsave DESC, rating DESC ") or die ('Unable to execute query. '. mysqli_error($con)); }
+elseif ( $_GET['src'] == 'low' ) { $pricequery = mysqli_query($con,"SELECT * FROM vegas_api_temp WHERE sessionid = '$sid' AND rating >= 3 AND propid != '359994' AND propid != '478558' AND refundable = '1' ORDER BY promoprice ASC, bigsave DESC, rating DESC ") or die ('Unable to execute query. '. mysqli_error($con)); }
+else { $pricequery = mysqli_query($con,"SELECT * FROM vegas_api_temp WHERE sessionid = '$sid' AND rating >= 3 AND propid != '359994' AND propid != '478558' AND refundable = '1' ORDER BY promoprice ASC, bigsave DESC, rating DESC ") or die ('Unable to execute query. '. mysqli_error($con)); }
+
+
+$hotelcount = mysqli_num_rows($pricequery);
+
+if ($hotelcount == '0')  { 
+header('Location: https://travsavers.com'.$searchurl.'?msg=8');
+} else {}
+
+include ('inc/header.php'); 
+
+
+
+?>
+
+<main>
+
+        <!-- /Page title -->
+        <!-- Tour list -->
+        <section id="tours">
+            <div class="container">
+                <div class="row">
+                    <div class="col-24">
+                        <!-- Filter -->
+                        <div class="d-block d-xl-flex align-items-center">
+                            <!-- Info -->
+                            <div class="mb-8 me-xl-auto">
+
+  <center><img src="/assets/img/<? if (isset($logo)) { echo $logo; } else { echo "travsav_logo_all.png"; } ?>" class="logo" alt="TravSavers - Save Big On Hotel, Attraction, and Vacation Packages!" style="max-width:300px; "></center>
+<hr>
+
+<?
+if ( isset ($_POST['CheckIn']) ) {
+$date1 = strtotime($CheckOut);
+$date2 = strtotime($CheckIn);
+$datediff = $date1 - $date2;
+$nts = round($datediff / (60 * 60 * 24));
+$_SESSION['nts'] = $nts;
+} else {}
+
+?>
+<h2 class="h6 fw-normal mb-2" style="text-align:center;">Choose From <b><?echo $hotelcount; ?> Featured Properties</b> in <? echo $city; ?></h2>
+
+<? $_SESSION['DisplayCheckIn'] = date('l, F j, Y', strtotime($_SESSION['CheckIn'])); ?>
+<? $_SESSION['DisplayCheckOut'] = date('l, F j, Y', strtotime($_SESSION['CheckOut'])); ?>
+
+ <p class="fsm-3 text-secondary mb-0">Your Dates: <? echo $_SESSION['DisplayCheckIn']; ?> - <? echo $_SESSION['DisplayCheckOut']; ?>, <? if ($_SESSION['nts'] == '1') { echo "1 Night"; } else { echo $_SESSION['nts']." Nights"; } ?> - <? echo $_SESSION['Adults']; ?> Adults 
+<? 
+if (isset ($_SESSION['Children']) ) {
+
+if ($_SESSION['Children'] > 1) { echo ", ".$_SESSION['Children']." Children"; } 
+elseif ($_SESSION['Children'] == 1) { echo ", 1 Child"; } 
+else {} 
+}
+
+?>
+</p>
+<a href="<? echo $searchurl; ?>" class="btn btn-sm btn-primary me-3" style="margin:5px;">&lt;&lt;&lt; Search Again</a><br><br>
+
+
+
+<div class="tour-filter b-block d-md-flex align-items-center">
+                                    <div class="d-block d-md-flex align-items-center me-3 mb-3 flex-fill">
+                                       <span class="me-2 d-sm-inline text-nowrap">Sort by:</span>
+
+ <a class="btn btn-sm btn-primary me-3" style="font-size:70%; white-space:nowrap; margin:0px 1px 5px 0px;" href="property-search.php?loc=<? echo $loc; ?>&src=savings">Highest $ Savings</a>  <a class="btn btn-sm btn-primary me-3" style="font-size:70%;margin:0px 1px 5px 0px; white-space:nowrap; " href="property-search.php?loc=<? echo $loc; ?>&src=stars">Star Rating (High To Low)</a>   <a class="btn btn-sm btn-primary me-3" style="font-size:70%;margin:0px 1px 5px 0px; white-space:nowrap; " href="property-search.php?loc=<? echo $loc; ?>&src=high">Promo Price (High To Low)</a>    <a class="btn btn-sm btn-primary me-3" style="font-size:70%;white-space:nowrap; margin:0px 1px 5px 0px;" href="property-search.php?loc=<? echo $loc; ?>&src=low">Promo Price (Low To High)</a>  
+<br>
+                                     
+									</div>
+</div>
+
+                            </div>
+                            <!-- /Info -->
+                          
+                        </div>
+                        <!-- /Filter -->
+                    </div>
+<i style='font-size:80%;'>For our guests' comfort and convenience, we only display <b>3 to 5 star properties</b> with flexible cancellation policies</i>
+ 
+<? include('results_include.php'); ?>
+
+        </section>
+        <!-- /Tour list -->
+    </main>
+
+<? include("inc/footer.php"); ?>
