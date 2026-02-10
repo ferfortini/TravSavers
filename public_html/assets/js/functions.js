@@ -628,14 +628,91 @@ var e = {
                             var departureInput = document.getElementById(departureInputId);
 
                             if (departureInput) {
+                                // Calculate minimum departure date (3 nights = 4 days later)
+                                var minDepartureDate = new Date(arrivalDate);
+                                minDepartureDate.setDate(arrivalDate.getDate() + 3);
+                                
                                 if (departureInput._flatpickr) {
-                                    departureInput._flatpickr.set("minDate", arrivalDate);
+                                    departureInput._flatpickr.set("minDate", minDepartureDate);
                                 } else {
                                     flatpickr(departureInput, {
                                         dateFormat: "m/d/Y",
-                                        minDate: arrivalDate,
-                                        disableMobile: true
+                                        minDate: minDepartureDate,
+                                        disableMobile: true,
+                                        onChange: function(departureDates) {
+                                            if (departureDates.length && arrivalDate) {
+                                                var checkIn = arrivalDate;
+                                                var checkOut = departureDates[0];
+                                                var diffTime = Math.abs(checkOut - checkIn);
+                                                var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                                
+                                                if (diffDays < 3) {
+                                                    var minCheckOut = new Date(checkIn);
+                                                    minCheckOut.setDate(checkIn.getDate() + 3);
+                                                    departureInput._flatpickr.setDate(minCheckOut, false);
+                                                    
+                                                    // Show error
+                                                    var errorElement = document.querySelector('.package_departure_date-error, .package_arrival_date-error');
+                                                    if (errorElement) {
+                                                        errorElement.textContent = 'Minimum stay is 3 nights.';
+                                                    }
+                                                    departureInput.classList.add('is-invalid');
+                                                    
+                                                    if (typeof toastr !== 'undefined') {
+                                                        toastr.warning('Minimum stay is 3 nights. Departure date has been adjusted.', 'Notice');
+                                                    }
+                                                } else {
+                                                    departureInput.classList.remove('is-invalid');
+                                                    var errorElement = document.querySelector('.package_departure_date-error, .package_arrival_date-error');
+                                                    if (errorElement) {
+                                                        errorElement.textContent = '';
+                                                    }
+                                                }
+                                            }
+                                        }
                                     });
+                                }
+                            }
+                        }
+
+                        // Enforce 3-night minimum for date_range (range mode)
+                        if (item.id === "date_range" && mode === "range" && selectedDates.length === 2) {
+                            var checkIn = selectedDates[0];
+                            var checkOut = selectedDates[1];
+                            var diffTime = Math.abs(checkOut - checkIn);
+                            var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            
+                            if (diffDays < 3) {
+                                // Calculate minimum checkout date (3 nights = 4 days later)
+                                var minCheckOut = new Date(checkIn);
+                                minCheckOut.setDate(checkIn.getDate() + 3);
+                                
+                                // Show error message
+                                var errorElement = document.querySelector('.destinations_date_range-error');
+                                if (errorElement) {
+                                    errorElement.textContent = 'Minimum stay is 3 nights. Please select a departure date at least 3 nights after arrival.';
+                                    var dateRangeInput = document.getElementById("date_range");
+                                    if (dateRangeInput) {
+                                        dateRangeInput.classList.add('is-invalid');
+                                    }
+                                }
+                                
+                                // Set the minimum checkout date
+                                instance.setDate([checkIn, minCheckOut], false);
+                                
+                                // Show toast notification
+                                if (typeof toastr !== 'undefined') {
+                                    toastr.warning('Minimum stay is 3 nights. Departure date has been adjusted.', 'Notice');
+                                }
+                            } else {
+                                // Clear error if valid
+                                var errorElement = document.querySelector('.destinations_date_range-error');
+                                if (errorElement) {
+                                    errorElement.textContent = '';
+                                }
+                                var dateRangeInput = document.getElementById("date_range");
+                                if (dateRangeInput) {
+                                    dateRangeInput.classList.remove('is-invalid');
                                 }
                             }
                         }

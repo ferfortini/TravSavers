@@ -479,8 +479,8 @@ const packages = {
                     return decodedPrice;
                 } catch (e) {
                     console.error('Error decoding price:', e);
-                    const calculatedPrice = (hotel.price - 200) / diffDate;
-                    return calculatedPrice >= 0 ? formatPrice(calculatedPrice) : '12';
+                    const calculatedPrice = (hotel.price - 200);
+                    return calculatedPrice >= 0 ? formatPrice(calculatedPrice) : formatPrice(12 * diffDate);
                 }
             })()}</h3>
                                     </div>
@@ -625,8 +625,8 @@ const packages = {
                                             <div class="border rounded p-2 h-100 text-center" style="background-color: #f8f9fa;">
                                                 <small class="text-muted d-block mb-1">Retail Rate</small>
                                                 ${hotel.publicPrices && hotel.publicPrices[0] ? `
-                                                    <h4 class="fw-bold text-dark mb-0">$${formatPrice(hotel.publicPrices[0].price / diffDate)}</h4>
-                                                    <small class="text-muted">Total Price incl. taxes</small>
+                                                    <h4 class="fw-bold text-dark mb-1">$${formatPrice(hotel.publicPrices[0].price)}</h4>
+                                                    <div class="text-dark fw-semibold" style="font-size: 0.75rem;">Total Price incl. taxes</div>
                                                 ` : `
                                                     <h4 class="fw-bold text-dark mb-0">N/A</h4>
                                                 `}
@@ -644,7 +644,7 @@ const packages = {
                                                        data-bs-html="true"
                                                        title="While at the hotel, you and your spouse participate in a fun &amp; friendly no-obligation 2 hour preview of the resort. It's that easy!"></i>
                                                 </small>
-                                                <h4 class="fw-bold text-success mb-0 resort-preview-rate-main">$${(() => {
+                                                <h4 class="fw-bold text-success mb-1 resort-preview-rate-main">$${(() => {
                 const rawPrice = urlParams.get('price');
                 if (!rawPrice) {
                     const price = packageData && packageData[0] ? (packageData[0].preview_rate * packageData[0].nights) : 0;
@@ -666,11 +666,11 @@ const packages = {
                     return decodedPrice;
                 } catch (e) {
                     console.error('Error decoding price:', e);
-                    const calculatedPrice = (hotel.price - 200) / diffDate;
-                    return calculatedPrice >= 0 ? formatPrice(calculatedPrice) : '12';
+                    const calculatedPrice = (hotel.price - 200);
+                    return calculatedPrice >= 0 ? formatPrice(calculatedPrice) : formatPrice(12 * diffDate);
                 }
             })()}</h4>
-                                                <small class="text-muted">Total Price incl. taxes</small>
+                                                <div class="text-dark fw-semibold" style="font-size: 0.75rem;">Total Price incl. taxes</div>
                                             </div>
                                         </div>
                                     </div>

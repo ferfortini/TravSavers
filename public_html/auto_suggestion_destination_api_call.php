@@ -5,7 +5,6 @@ ini_set('display_errors', 0);
 
 header('Content-Type: application/json');
 
-$curlprop = curl_init();
 $isLocal = in_array($_SERVER['HTTP_HOST'], ['localhost:8000', 'localhost:8001', '127.0.0.1', 'localhost']);
 $destination = $_GET['SearchString'] ?? '';
 
@@ -14,12 +13,47 @@ if (empty($destination)) {
     exit;
 }
 
+// Authenticate with API to get access token
+// Get token from cookie first, if not available, authenticate
+$token = $_COOKIE['accessToken'] ?? '';
+
+// If no token in cookie, authenticate now
+if (empty($token)) {
+    $email = $isLocal ? 'testgerman3@travcoding.com' : 'api@travsavers.com';
+    $password = $isLocal ? 'Trav123' : 'hzZGiGfwZnLWbKT';
+    $authUrl = $isLocal 
+        ? 'https://qa2-api.travcoding.com/identity/users/sign-in' 
+        : 'https://api.travcoding.com/identity/users/sign-in';
+    
+    $jsonData = [
+        'email' => $email,
+        'password' => $password,
+    ];
+    
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_URL => $authUrl,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($jsonData),
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    
+    $result = json_decode(curl_exec($ch));
+    $token = $result->accessToken ?? '';
+    
+    if (function_exists('curl_close')) {
+        @curl_close($ch);
+    }
+}
+
 $url = $isLocal
     ? "https://qa2-api.travcoding.com:4000/Locations?SearchString=" . urlencode($destination)
     : "https://api.travcoding.com:4000/Locations?SearchString=" . urlencode($destination);
 
-// Get token from cookie
-$token = $_COOKIE['accessToken'] ?? '';
+$curlprop = curl_init();
 
 curl_setopt_array(
     $curlprop,

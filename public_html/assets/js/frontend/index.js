@@ -22,7 +22,7 @@ let destination = {
                         type: 'GET',
                         url: 'auto_suggestion_destination_api_call.php',
                         data: {
-                            SearchString: encodeURIComponent(inputVal)
+                            SearchString: inputVal
                         },
                         dataType: 'json',
                         success: function (response) {
@@ -130,8 +130,35 @@ let destination = {
 
             const formData = new FormData(this);
             const childAges = Array.from(document.querySelectorAll('input[name^="child_"]')).map(child => child.value);
-            const arrivalDate = formData.get('date_range').split(' to ')[0];
-            const departureDate = formData.get('date_range').split(' to ')[1];
+            const dateRange = formData.get('date_range');
+            
+            if (!dateRange || !dateRange.includes(' to ')) {
+                e.preventDefault();
+                return;
+            }
+            
+            const arrivalDate = dateRange.split(' to ')[0];
+            const departureDate = dateRange.split(' to ')[1];
+            
+            // Validate 3-night minimum stay
+            const checkIn = new Date(convertToYMD(arrivalDate));
+            const checkOut = new Date(convertToYMD(departureDate));
+            const diffTime = Math.abs(checkOut - checkIn);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 3) {
+                const dateRangeInput = $(this).find('.destinations_date_range');
+                const dateRangeError = $(this).find('.destinations_date_range-error');
+                dateRangeError.text('Minimum stay is 3 nights. Please select a departure date at least 3 nights after arrival.');
+                dateRangeInput.addClass('is-invalid');
+                e.preventDefault();
+                
+                // Show toast notification
+                if (typeof toastr !== 'undefined') {
+                    toastr.warning('Minimum stay is 3 nights. Please adjust your dates.', 'Notice');
+                }
+                return;
+            }
         
             const filterData = {
                 dest_loc: btoa(formData.get('dest_loc')),
@@ -291,23 +318,82 @@ $('.openDateModal').on('click', function () {
 });
 
 // Initialize Flatpickr for departure (manually set later)
-const departurePicker = $("#departureDate").flatpickr({
-    dateFormat: "m/d/Y",
-    clickOpens: false,
-});
+let departurePicker;
 
 // Initialize Flatpickr for arrival with auto departure calculation
 $("#arrivalDate").flatpickr({
     dateFormat: "m/d/Y",
     minDate: "today",
     onChange: function (selectedDates) {
-        if (selectedDates.length && nights > 0) {
+        if (selectedDates.length) {
             const arrival = selectedDates[0];
-            const departure = new Date(arrival);
-            departure.setDate(arrival.getDate() + nights);
-            departurePicker.setDate(departure);
+            // Enforce 3-night minimum (3 nights = 4 days later)
+            const minDeparture = new Date(arrival);
+            minDeparture.setDate(arrival.getDate() + 3);
+            
+            // Initialize or update departure picker
+            if (!departurePicker) {
+                departurePicker = $("#departureDate").flatpickr({
+                    dateFormat: "m/d/Y",
+                    clickOpens: true,
+                    minDate: minDeparture,
+                    onChange: function (departureDates) {
+                        if (departureDates.length) {
+                            const arrivalInput = $("#arrivalDate");
+                            const arrivalDate = arrivalInput[0]._flatpickr?.selectedDates[0];
+                            
+                            if (arrivalDate) {
+                                const checkIn = arrivalDate;
+                                const checkOut = departureDates[0];
+                                const diffTime = Math.abs(checkOut - checkIn);
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                
+                                if (diffDays < 3) {
+                                    // Calculate minimum checkout date (3 nights = 4 days later)
+                                    const minCheckOut = new Date(checkIn);
+                                    minCheckOut.setDate(checkIn.getDate() + 3);
+                                    
+                                    // Set to minimum date
+                                    departurePicker.setDate(minCheckOut, false);
+                                    
+                                    // Show error
+                                    const departureError = $('.departureDate-error');
+                                    departureError.text('Minimum stay is 3 nights. Departure date must be at least 3 nights after arrival.');
+                                    $('#departureDate').addClass('is-invalid');
+                                    
+                                    // Show toast notification
+                                    if (typeof toastr !== 'undefined') {
+                                        toastr.warning('Minimum stay is 3 nights. Departure date has been adjusted.', 'Notice');
+                                    }
+                                } else {
+                                    // Clear error if valid
+                                    $('.departureDate-error').text('');
+                                    $('#departureDate').removeClass('is-invalid');
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                // Update minimum date
+                departurePicker.set("minDate", minDeparture);
+            }
+            
+            // Auto-set departure date if nights is set, otherwise set to minimum
+            if (nights > 0 && nights >= 3) {
+                const calculatedDeparture = new Date(arrival);
+                calculatedDeparture.setDate(arrival.getDate() + nights);
+                departurePicker.setDate(calculatedDeparture);
+            } else {
+                // Set to minimum 3 nights
+                departurePicker.setDate(minDeparture);
+            }
+            
+            // Clear any validation errors
+            $('.arrivalDate-error, .departureDate-error').text('');
+            $('.arrivalDate, .departureDate').removeClass('is-invalid');
         } else {
-            console.warn("Nights not set or no arrival date selected");
+            console.warn("No arrival date selected");
         }
     }
 });
@@ -326,6 +412,30 @@ $(document).on('submit', '#package-price-form', function (e) {
         console.warn("Validation failed");
         return;
     }
+    
+    // Validate 3-night minimum stay
+    const arrivalDate = arrivalInput.val();
+    const departureDate = departureInput.val();
+    
+    if (arrivalDate && departureDate) {
+        const checkIn = new Date(convertToYMD(arrivalDate));
+        const checkOut = new Date(convertToYMD(departureDate));
+        const diffTime = Math.abs(checkOut - checkIn);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 3) {
+            const departureError = $(this).find('.departureDate-error');
+            departureError.text('Minimum stay is 3 nights. Please select a departure date at least 3 nights after arrival.');
+            departureInput.addClass('is-invalid');
+            
+            // Show toast notification
+            if (typeof toastr !== 'undefined') {
+                toastr.warning('Minimum stay is 3 nights. Please adjust your dates.', 'Notice');
+            }
+            return;
+        }
+    }
+    
     const price = $('#selectedPrice').val();
     const filterData = {
         price: btoa(price),
