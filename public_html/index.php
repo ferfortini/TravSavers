@@ -1,4 +1,7 @@
 <?php
+// Authenticate with API to get access token
+include_once 'api_auth.php';
+
 $page = "home";
 $title = "Book Online in No Time!";
 include "inc/header.php";
@@ -324,54 +327,94 @@ $destinations = mysqli_query($con, "SELECT * FROM custom_locations ORDER BY id D
         </div>
     </section>
 
-    <section>
+    <section class="py-5">
         <div class="container">
-            <div class="flex-row g-4">
-                <div class="d-flex justify-content-center">
-                    <div class="h4 card-title mb-4" style="text-decoration:underline;">Or select by package price:</div>
+            <div class="row mb-4">
+                <div class="col-12 text-center">
+                    <h2 class="h3 mb-2">Feature Packages</h2>
+                    <p class="text-muted">Discover our most popular destinations</p>
                 </div>
             </div>
             <div class="row g-4">
-
+                <!-- Punta Cana -->
                 <div class="col-sm-6 col-md-3">
-                    <div class="card card-body bg-light h-100 align-items-center justify-content-center">
-                        <div class="openDateModal d-flex align-items-center" data-price="49">
-                            <img src="assets/images/element/beach.svg" class="h-30px me-3" alt="">
-                            <input type="text" id="date-range" style="display:none;" placeholder="Select date range" />
-                            <h6 class="card-title mb-0"><a id="package" data-price="49" href="#" class="stretched-link">$49 Packages</a></h6>
+                    <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
+                        <div class="position-relative" style="height: 250px; overflow: hidden;">
+                            <img src="https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=600&fit=crop" 
+                                 class="card-img-top w-100 h-100" 
+                                 style="object-fit: cover; transition: transform 0.3s ease;" 
+                                 alt="Punta Cana"
+                                 onmouseover="this.style.transform='scale(1.1)'"
+                                 onmouseout="this.style.transform='scale(1)'">
+                            <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
+                                <h5 class="text-white mb-0 fw-bold">Punta Cana</h5>
+                            </div>
+                        </div>
+                        <div class="card-body text-center p-3">
+                            <a href="search-package.php?destination=Punta+Cana" class="btn btn-primary btn-sm w-100">Explore Packages</a>
                         </div>
                     </div>
                 </div>
 
+                <!-- Branson Missouri -->
                 <div class="col-sm-6 col-md-3">
-                    <div class="card card-body bg-light h-100 align-items-center justify-content-center">
-                        <div class="openDateModal d-flex align-items-center" data-price="99">
-                            <img src="assets/images/element/island.svg" class="h-30px me-3" alt="">
-                            <input type="text" id="date-range" style="display:none;" placeholder="Select date range" />
-                            <h6 class="card-title mb-0"><a id="package" data-price="99" href="#" class="stretched-link">$99 Packages</a></h6>
+                    <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
+                        <div class="position-relative" style="height: 250px; overflow: hidden;">
+                            <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop" 
+                                 class="card-img-top w-100 h-100" 
+                                 style="object-fit: cover; transition: transform 0.3s ease;" 
+                                 alt="Branson Missouri"
+                                 onmouseover="this.style.transform='scale(1.1)'"
+                                 onmouseout="this.style.transform='scale(1)'">
+                            <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
+                                <h5 class="text-white mb-0 fw-bold">Branson, Missouri</h5>
+                            </div>
+                        </div>
+                        <div class="card-body text-center p-3">
+                            <a href="search-package.php?destination=Branson+Missouri" class="btn btn-primary btn-sm w-100">Explore Packages</a>
                         </div>
                     </div>
                 </div>
 
+                <!-- Las Vegas -->
                 <div class="col-sm-6 col-md-3">
-                    <div class="card card-body bg-light h-100 align-items-center justify-content-center">
-                        <div class="openDateModal d-flex align-items-center" data-price="199">
-                            <img src="assets/images/element/pool.svg" class="h-30px me-3" alt="">
-                            <h6 class="card-title mb-0"><a id="package" data-price="199" href="#" class="stretched-link">$199 Packages</a></h6>
+                    <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
+                        <div class="position-relative" style="height: 250px; overflow: hidden;">
+                            <img src="assets/images/heros/vegas.jpg" 
+                                 class="card-img-top w-100 h-100" 
+                                 style="object-fit: cover; transition: transform 0.3s ease;" 
+                                 alt="Las Vegas"
+                                 onmouseover="this.style.transform='scale(1.1)'"
+                                 onmouseout="this.style.transform='scale(1)'">
+                            <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
+                                <h5 class="text-white mb-0 fw-bold">Las Vegas</h5>
+                            </div>
+                        </div>
+                        <div class="card-body text-center p-3">
+                            <a href="search-package.php?destination=Las+Vegas" class="btn btn-primary btn-sm w-100">Explore Packages</a>
                         </div>
                     </div>
                 </div>
 
+                <!-- Napa Valley -->
                 <div class="col-sm-6 col-md-3">
-                    <div class="card card-body bg-light h-100 align-items-center justify-content-center">
-                        <div class="openDateModal d-flex align-items-center" data-price="399">
-                            <img src="assets/images/element/camping.svg" class="h-30px me-3" alt="">
-                            <h6 class="card-title mb-0"><a id="package" data-price="399" href="#" class="stretched-link">$399 Packages</a></h6>
+                    <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
+                        <div class="position-relative" style="height: 250px; overflow: hidden;">
+                            <img src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=800&h=600&fit=crop" 
+                                 class="card-img-top w-100 h-100" 
+                                 style="object-fit: cover; transition: transform 0.3s ease;" 
+                                 alt="Napa Valley"
+                                 onmouseover="this.style.transform='scale(1.1)'"
+                                 onmouseout="this.style.transform='scale(1)'">
+                            <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
+                                <h5 class="text-white mb-0 fw-bold">Napa Valley</h5>
+                            </div>
+                        </div>
+                        <div class="card-body text-center p-3">
+                            <a href="search-package.php?destination=Napa+Valley" class="btn btn-primary btn-sm w-100">Explore Packages</a>
                         </div>
                     </div>
                 </div>
-
-
             </div>
         </div>
     </section>

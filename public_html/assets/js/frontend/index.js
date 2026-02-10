@@ -38,7 +38,24 @@ let destination = {
                                 suggestions = `<li class="no-results">Sorry, we can't find the destination.</li>`;
                             }
 
-                            $('#dest_loc').after(`<ul id="suggestions-list">${suggestions}</ul>`);
+                            // Append to the column container for proper positioning
+                            let $inputContainer = $('#dest_loc').closest('.form-icon-input');
+                            let $colContainer = $inputContainer.closest('.col-md-6');
+                            
+                            // Ensure the column has relative positioning
+                            $colContainer.css('position', 'relative');
+                            
+                            $('#suggestions-list').remove();
+                            $colContainer.append(`<ul id="suggestions-list">${suggestions}</ul>`);
+                            
+                            // Calculate position relative to the input
+                            let inputOffset = $inputContainer.position();
+                            $('#suggestions-list').css({
+                                'position': 'absolute',
+                                'top': (inputOffset.top + $inputContainer.outerHeight() + 4) + 'px',
+                                'left': inputOffset.left + 'px',
+                                'width': $inputContainer.outerWidth() + 'px'
+                            });
 
                             $('#suggestions-list').on('click', '.suggestion-item', function () {
                                 let selectedValue = $(this).text();
@@ -60,14 +77,29 @@ let destination = {
 
                             $('#loader').hide();
                         },
-                        error: function () {
+                        error: function (xhr, status, error) {
                             $('#loader').hide();
                             $('#suggestions-list').remove();
-                            $('#dest_loc').after(`
-                                    <ul id="suggestions-list">
-                                        <li class="no-results">Sorry, we can't find the destination.</li>
-                                    </ul>
-                                `);
+                            let errorMsg = 'Sorry, we can\'t find the destination.';
+                            if (xhr.responseJSON && xhr.responseJSON.error) {
+                                errorMsg = xhr.responseJSON.error;
+                            }
+                            let $inputContainer = $('#dest_loc').closest('.form-icon-input');
+                            let $colContainer = $inputContainer.closest('.col-md-6');
+                            
+                            // Ensure the column has relative positioning
+                            $colContainer.css('position', 'relative');
+                            
+                            $colContainer.append(`<ul id="suggestions-list"><li class="no-results">${errorMsg}</li></ul>`);
+                            
+                            // Calculate position relative to the input
+                            let inputOffset = $inputContainer.position();
+                            $('#suggestions-list').css({
+                                'position': 'absolute',
+                                'top': (inputOffset.top + $inputContainer.outerHeight() + 4) + 'px',
+                                'left': inputOffset.left + 'px',
+                                'width': $inputContainer.outerWidth() + 'px'
+                            });
                         }
                     });
                 } else {

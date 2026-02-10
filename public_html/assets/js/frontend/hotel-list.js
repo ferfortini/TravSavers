@@ -227,10 +227,22 @@ function fetchHotels(formData) {
 
             hotels.forEach((hotel, index) => {
                 const stars = generateStars(hotel.starRating || 0);
-                const amenitiesHTML = (hotel.amenities || []).map(a => `<li class="nav-item">${a.name}</li>`).join('');
+                
+                // Limit amenities to top 4
+                const allAmenities = hotel.amenities || [];
+                const topAmenities = allAmenities.slice(0, 4);
+                const amenitiesHTML = topAmenities.map(a => `<li class="nav-item">${a.name}</li>`).join('');
+                const moreAmenitiesCount = allAmenities.length > 4 ? allAmenities.length - 4 : 0;
+                const moreAmenitiesHTML = moreAmenitiesCount > 0 ? `<li class="nav-item"><small class="text-muted">+${moreAmenitiesCount} more</small></li>` : '';
+                
                 const checkInDate = formatDate(hotel.possibleStays[0].checkIn);
                 const checkOutDate = formatDate(hotel.possibleStays[0].checkOut);
                 let diffDate = calculateDateDifference(checkInDate, checkOutDate);
+                
+                // Format date more compactly
+                const shortCheckIn = new Date(hotel.possibleStays[0].checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const shortCheckOut = new Date(hotel.possibleStays[0].checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                
                 const card = `
                         <div class="card shadow p-2">
                             <div class="row g-0">
@@ -265,32 +277,49 @@ function fetchHotels(formData) {
                                         </div>
 
                                         <h4 class="card-title mb-1 hotel-detail-button" data-index="${index}"><a href="#">${hotel.displayName}</a></h4>
-                                        <small><i class="bi bi-geo-alt me-2"></i>${hotel.address} ${hotel?.city}, ${hotel?.state}, ${hotel?.zipCode}</small>
-                                        <ul class="nav nav-divider mt-3">
-                                            ${amenitiesHTML}
+                                        <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${hotel?.city || ''}, ${hotel?.state || ''}</small>
+                                        
+                                        <ul class="nav nav-divider mt-2 mb-2">
+                                            ${amenitiesHTML}${moreAmenitiesHTML}
                                         </ul>
 
-                                        <ul class="list-group list-group-borderless lead mb-0 mt-lg-3">
-                                            <li class="list-group-item d-flex text-info p-0">
-                                                <i class="bi bi-calendar-week me-2"></i>${checkInDate} - ${checkOutDate} (${diffDate} Nights)
-                                            </li>
-                                        </ul>
-
-                                        <div class="d-sm-flex justify-content-sm-between align-items-center mt-3 mt-md-auto price-card">
-                                            <div class="d-flex align-items-center">
-                                                <span class="mb-0 me-1">Resort Preview Rate: </span>
-                                                 <h3 class="fw-bold text-dark mb-0 me-1">$${(hotel.price - 200) / diffDate >= 0 ? formatPrice((hotel.price - 200) / diffDate) : '12'}</h3> <span>/night</span>
-                                            </div>
+                                        <div class="d-flex align-items-center text-info mb-3">
+                                            <i class="bi bi-calendar-week me-2"></i>
+                                            <small>${shortCheckIn} - ${shortCheckOut} (${diffDate} nights)</small>
                                         </div>
 
-                                        <div class="d-sm-flex justify-content-sm-between align-items-center mt-1 price-card">
-                                            <div class="d-flex align-items-center">
-                                                <span class="mb-0 me-1">Everyday TravSaver Rate: </span>
-                                                <h4 class="fw-light text-secondary mb-0 me-1">$${formatPrice(hotel.publicPrices[0].price / diffDate)}</h4> <span>/night</span>
+                                        <div class="mt-auto">
+                                            <div class="row g-2 mb-3">
+                                                <!-- Retail Rate Tile (Left) -->
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 h-100 text-center" style="background-color: #f8f9fa;">
+                                                        <small class="text-muted d-block mb-1">Retail Rate</small>
+                                                        ${hotel.publicPrices && hotel.publicPrices[0] ? `
+                                                            <h4 class="fw-bold text-dark mb-0">$${formatPrice(hotel.publicPrices[0].price / diffDate)}</h4>
+                                                            <small class="text-muted">Total Price incl. taxes</small>
+                                                        ` : `
+                                                            <h4 class="fw-bold text-dark mb-0">N/A</h4>
+                                                        `}
+                                                    </div>
+                                                </div>
+                                                
+                                                <!-- Hotel Sponsored Rate Tile (Right) -->
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 h-100 text-center" style="background-color: #f8f9fa;">
+                                                        <small class="d-block mb-1" style="color: #0d6e3d;">
+                                                            Hotel Sponsored Rate
+                                                            <i class="bi bi-info-circle ms-1 text-primary" 
+                                                               data-bs-toggle="tooltip" 
+                                                               data-bs-placement="top" 
+                                                               data-bs-html="true"
+                                                               title="While at the hotel, you and your spouse participate in a fun &amp; friendly no-obligation 2 hour preview of the resort. It's that easy!"></i>
+                                                        </small>
+                                                        <h4 class="fw-bold text-success mb-0">$${(hotel.price - 200) / diffDate >= 0 ? formatPrice((hotel.price - 200) / diffDate) : '12'}</h4>
+                                                        <small class="text-muted">Total Price incl. taxes</small>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="mt-3 mt-sm-0">
-                                                <button class="btn btn-lg btn-success mb-0 w-100 hotel-detail-button" data-index="${index}" >View Hotel Details <i class="bi bi-chevron-double-right"></i></button>
-                                            </div>
+                                            <button class="btn btn-success w-100 hotel-detail-button" data-index="${index}">View Details <i class="bi bi-arrow-right"></i></button>
                                         </div>
                                     </div>
                                 </div>
@@ -299,6 +328,13 @@ function fetchHotels(formData) {
                     `;
                 container.append(card);
             });
+            
+            // Initialize Bootstrap tooltips for the newly added cards
+            const tooltipTriggerList = container.find('[data-bs-toggle="tooltip"]');
+            tooltipTriggerList.each(function() {
+                new bootstrap.Tooltip(this);
+            });
+            
             $(document).on('click', '.hotel-detail-button', function (e) {
                 e.preventDefault();
                 const buttonId = $(this).attr('id');

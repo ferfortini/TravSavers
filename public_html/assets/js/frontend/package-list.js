@@ -308,6 +308,12 @@ const packages = {
                     hotels.forEach((hotel, index) => {
                         this.renderHotelCard(hotel, container, apiHotels, requestPayload.hotelsRequest.locationCode);
                     });
+                    
+                    // Initialize Bootstrap tooltips for all newly added cards
+                    const tooltipTriggerList = container.find('[data-bs-toggle="tooltip"]');
+                    tooltipTriggerList.each(function() {
+                        new bootstrap.Tooltip(this);
+                    });
 
                     if (apiResponse?.counters?.totalFilteredHotels > 10) {
                         renderPagination(
@@ -509,15 +515,23 @@ const packages = {
             }
         }
 
-        const amenitiesHTML = includePerks.map(perksArray => {
-            return perksArray.map(a => {
-              const amenityName = a.split('(')[0].trim();
-              return `<li class="nav-item">${amenityName}</li>`;
-            }).join('');
-          }).join('');
+        // Limit amenities to top 4
+        const allPerks = includePerks.flat();
+        const topPerks = allPerks.slice(0, 4);
+        const amenitiesHTML = topPerks.map(a => {
+            const amenityName = a.split('(')[0].trim();
+            return `<li class="nav-item">${amenityName}</li>`;
+        }).join('');
+        const moreAmenitiesCount = allPerks.length > 4 ? allPerks.length - 4 : 0;
+        const moreAmenitiesHTML = moreAmenitiesCount > 0 ? `<li class="nav-item"><small class="text-muted">+${moreAmenitiesCount} more</small></li>` : '';
 
         const stars = generateStars(hotel.starRating || 0);
         const packageTitle = packageData && packageData[0] ? packageData[0].package_title : hotel.package_title;
+        
+        // Format date more compactly
+        const shortCheckIn = new Date(hotel?.arrival || hotel?.possibleStays[0]?.checkIn).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const shortCheckOut = new Date(hotel?.departure || hotel?.possibleStays[0]?.checkOut).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        
         const card = `
                 <div class="card shadow p-2">
                     <div class="row g-0">
@@ -550,16 +564,12 @@ const packages = {
                                             </ul>
                                         </div>
                                 <h4 class="card-title mb-1 package-button" data-hotel-data='${JSON.stringify(hotel)}' data-location-code="${locationCode}" data-package-id="${packageData && packageData[0] ? packageData[0].id : ''}"  data-checkout="${checkOutDate}" data-everyday-travsaver-rate1="${hotel.publicPrices[0].price}" data-package-name="${packageTitle}"><a href="#">${packageTitle}</a></h4>
-                                <small><i class="bi bi-geo-alt me-2"></i>${hotel.city}, ${hotel.state}</small>
-                                <ul class="nav nav-divider mt-3">${amenitiesHTML}</ul>
-                                <ul class="list-group list-group-borderless h5 mb-0 mt-lg-3">
-                                    <li class="list-group-item d-flex text-info p-0 hotel-nights">
-                                        <i class="bi bi-clock me-2"></i>${diffDate > 0 ? diffDate : hotel.nights} Nights
-                                    </li>
-                                    <li class="list-group-item d-flex text-info p-0 mt-lg-2">
-                                        <i class="bi bi-geo-fill me-2"></i>${hotel.displayName || hotel.name}
-                                    </li>
-                                </ul>
+                                <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${hotel.city || ''}, ${hotel.state || ''}</small>
+                                <ul class="nav nav-divider mt-2 mb-2">${amenitiesHTML}${moreAmenitiesHTML}</ul>
+                                <div class="d-flex align-items-center text-info mb-3">
+                                    <i class="bi bi-calendar-week me-2"></i>
+                                    <small>${shortCheckIn} - ${shortCheckOut} (${diffDate > 0 ? diffDate : hotel.nights} nights)</small>
+                                </div>
                                 
                                 ${(() => {
                 const price = urlParams.get('price');
@@ -608,15 +618,33 @@ const packages = {
                                     </div>` : '';
             })()}
                                 
-                                <div class="d-sm-flex justify-content-sm-between align-items-center mt-3 mt-md-auto price-card">
-                                    <div class="d-flex align-items-center">
-                                       
-                                    </div>
-                                </div>
-                                <div class="d-sm-flex justify-content-sm-between align-items-center mt-1 price-card">
-                                    <div class="d-flex align-items-center me-3">
-                                     <span class="mb-0 me-1">Resort Preview Rate: </span>
-                                        <h3 class="fw-bold text-dark mb-0 me-1 resort-preview-rate-main">$${(() => {
+                                <div class="mt-auto">
+                                    <div class="row g-2 mb-3">
+                                        <!-- Retail Rate Tile (Left) -->
+                                        <div class="col-6">
+                                            <div class="border rounded p-2 h-100 text-center" style="background-color: #f8f9fa;">
+                                                <small class="text-muted d-block mb-1">Retail Rate</small>
+                                                ${hotel.publicPrices && hotel.publicPrices[0] ? `
+                                                    <h4 class="fw-bold text-dark mb-0">$${formatPrice(hotel.publicPrices[0].price / diffDate)}</h4>
+                                                    <small class="text-muted">Total Price incl. taxes</small>
+                                                ` : `
+                                                    <h4 class="fw-bold text-dark mb-0">N/A</h4>
+                                                `}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Hotel Sponsored Rate Tile (Right) -->
+                                        <div class="col-6">
+                                            <div class="border rounded p-2 h-100 text-center" style="background-color: #f8f9fa;">
+                                                <small class="d-block mb-1" style="color: #0d6e3d;">
+                                                    Hotel Sponsored Rate
+                                                    <i class="bi bi-info-circle ms-1 text-primary" 
+                                                       data-bs-toggle="tooltip" 
+                                                       data-bs-placement="top" 
+                                                       data-bs-html="true"
+                                                       title="While at the hotel, you and your spouse participate in a fun &amp; friendly no-obligation 2 hour preview of the resort. It's that easy!"></i>
+                                                </small>
+                                                <h4 class="fw-bold text-success mb-0 resort-preview-rate-main">$${(() => {
                 const rawPrice = urlParams.get('price');
                 if (!rawPrice) {
                     const price = packageData && packageData[0] ? (packageData[0].preview_rate * packageData[0].nights) : 0;
@@ -641,11 +669,12 @@ const packages = {
                     const calculatedPrice = (hotel.price - 200) / diffDate;
                     return calculatedPrice >= 0 ? formatPrice(calculatedPrice) : '12';
                 }
-            })()}</h3>
+            })()}</h4>
+                                                <small class="text-muted">Total Price incl. taxes</small>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="mt-3 mt-sm-0">
-                                        <button class="btn btn-lg btn-success mb-0 w-100 package-button" data-hotel-data='${JSON.stringify(hotel)}' data-package-id="${packageData && packageData[0] ? packageData[0].id : ''}" data-location-code="${locationCode}"  data-checkout="${checkOutDate}" data-everyday-travsaver-rate="${hotel.publicPrices[0].price}">Package Details <i class="bi bi-chevron-double-right"></i></button>
-                                    </div>
+                                    <button class="btn btn-success w-100 package-button" data-hotel-data='${JSON.stringify(hotel)}' data-package-id="${packageData && packageData[0] ? packageData[0].id : ''}" data-location-code="${locationCode}"  data-checkout="${checkOutDate}" data-everyday-travsaver-rate="${hotel.publicPrices[0].price}">View Details <i class="bi bi-arrow-right"></i></button>
                                 </div>
                             </div>
                         </div>

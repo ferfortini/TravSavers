@@ -23134,22 +23134,23 @@ form label.req:after {
     position: relative;
 }
 
+.form-icon-input {
+    position: relative;
+}
+
 /* Suggestions list styling */
 #suggestions-list {
-    position: absolute;
-    /* top: 100%; */
-    /* Show below input */
-    left: 0;
-    z-index: 1050;
-    /* Make sure it's above other elements */
     background: #fff;
     border: 1px solid #ccc;
-    width: 100%;
+    border-radius: 8px;
     max-height: 200px;
     overflow-y: auto;
     list-style: none;
     padding: 0;
     margin: 0;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    display: block !important;
+    z-index: 1050;
 }
 
 /* Each suggestion item */
@@ -23286,29 +23287,21 @@ object-fit: cover;
     pointer-events: none;
     opacity: 0.5;
 }
-#suggestions-list {
-    position: absolute;
-    z-index: 1000;
-    background: white;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    width: 100%;
-    max-height: 200px;
-    overflow-y: auto;
-    margin-top: 4px;
-    padding: 8px 0;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.05);
-}
-
 #suggestions-list li {
     padding: 10px 15px;
     cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+#suggestions-list li:last-child {
+    border-bottom: none;
 }
 
 #suggestions-list li.no-results {
     cursor: default;
     color: #999;
     font-style: italic;
+    text-align: center;
 }
 input[type="file"] {
     border: 1px solid #ccc;
