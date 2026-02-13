@@ -1,83 +1,12 @@
 let arrival, departure, adults, childAges = [];
 let allHotels = []; // Store all hotels for filtering
-let map = null; // Leaflet map instance (desktop)
-let mapMobile = null; // Leaflet map instance (mobile)
+let map = null; // Google Maps instance (desktop)
+let mapMobile = null; // Google Maps instance (mobile)
 let markers = []; // Store map markers
 let markersMobile = []; // Store map markers (mobile)
 let destinationMarker = null; // Destination marker
 let destinationMarkerMobile = null; // Destination marker (mobile)
-
-// Update hero image dynamically if no curated image exists
-function updateHeroImage(destination, hotels) {
-    const heroSection = $('.hero-section');
-    if (!heroSection.length) {
-        console.log('Hero section not found');
-        return;
-    }
-    
-    // Check current background image
-    const currentBg = heroSection.css('background-image');
-    const dataHeroImage = heroSection.data('hero-image') || '';
-    
-    // List of curated image filenames (don't override these)
-    const curatedImages = ['miami.jpg', 'vegas.jpg', 'orlando.jpg', 'myrtle-beach.jpg', 'branson.jpg'];
-    const hasCuratedImage = curatedImages.some(img => {
-        return (currentBg && currentBg.includes(img)) || (dataHeroImage && dataHeroImage.includes(img));
-    });
-    
-    // Only update if we don't have a curated image (i.e., using default.jpg or no image)
-    if (hasCuratedImage) {
-        console.log('Curated hero image already set, skipping hotel image fallback');
-        return;
-    }
-    
-    // Only use hotel image if current image is default or missing
-    if (currentBg && !currentBg.includes('default.jpg') && currentBg !== 'none' && !currentBg.includes('url("")')) {
-        console.log('Hero image already set (not default), skipping update');
-        return;
-    }
-    
-    // Try to use hotel image if available (better than default or missing images)
-    if (hotels && hotels.length > 0) {
-        // Try to get hotel image - check multiple possible structures
-        let hotelImage = null;
-        const firstHotel = hotels[0];
-        
-        if (firstHotel.images && firstHotel.images.length > 0 && firstHotel.images[0].url) {
-            hotelImage = firstHotel.images[0].url;
-        } else if (firstHotel.image) {
-            hotelImage = firstHotel.image;
-        } else if (firstHotel.imageUrl) {
-            hotelImage = firstHotel.imageUrl;
-        }
-        
-        if (hotelImage) {
-            // Add cache-busting parameter to prevent browser caching
-            // Use both timestamp and random number for maximum cache-busting
-            const separator = hotelImage.includes('?') ? '&' : '?';
-            const timestamp = Date.now();
-            const random = Math.floor(Math.random() * 1000000);
-            const cacheBuster = `_t=${timestamp}&_r=${random}`;
-            const imageUrl = `${hotelImage}${separator}${cacheBuster}`;
-            
-            // Force browser to reload by creating new image object
-            const img = new Image();
-            img.onload = function() {
-                // Set background image only after image is loaded
-                heroSection.css('background-image', `url("${imageUrl}")`);
-                console.log('Updated hero image from hotel API (cache-busted):', imageUrl);
-            };
-            img.onerror = function() {
-                console.log('Failed to load hotel image:', imageUrl);
-            };
-            img.src = imageUrl;
-        } else {
-            console.log('No hotel image available in hotel data:', firstHotel);
-        }
-    } else {
-        console.log('No hotels available for hero image');
-    }
-}
+let googleMapsLoaded = false; // Flag to track if Google Maps API is loaded
 
 // Define utility functions at the top level
 function showSkeletonLoaders(count = 3) {
@@ -105,6 +34,18 @@ function showSkeletonLoaders(count = 3) {
     }
 }
 
+// Helper function to generate star icons
+function generateStars(rating) {
+    let stars = '';
+    for (let i = 0; i < 5; i++) {
+        if (i < rating) {
+            stars += '<i class="bi bi-star-fill text-warning"></i>';
+        } else {
+            stars += '<i class="bi bi-star text-muted"></i>';
+        }
+    }
+    return stars;
+}
 
 let debounceTimeout;
 $('#dest_loc').on('input', function () {
@@ -128,7 +69,11 @@ $('#dest_loc').on('input', function () {
 
                     let suggestions = '';
                     $.each(responseData.locations, function (index, value) {
-                        suggestions += '<li class="suggestion-item" value="' + value.code + '"longitude="' + value.geoLocation.longitude + '" latitude="' + value.geoLocation.latitude + '">' + value.name + '</li>';
+                        // API returns latitude and longitude inverted, so swap them
+                        // API's "latitude" is actually longitude, and API's "longitude" is actually latitude
+                        const actualLatitude = value.geoLocation.longitude; // API's longitude is actual latitude
+                        const actualLongitude = value.geoLocation.latitude; // API's latitude is actual longitude
+                        suggestions += '<li class="suggestion-item" value="' + value.code + '" longitude="' + actualLongitude + '" latitude="' + actualLatitude + '">' + value.name + '</li>';
                     });
 
                     // Append the list
@@ -139,6 +84,12 @@ $('#dest_loc').on('input', function () {
                         let longitude = $(this).attr('longitude');
                         let latitude = $(this).attr('latitude');
                         let locationCode = $(this).attr('value');
+                        
+                        // Debug: Log coordinates to verify they're correct
+                        console.log('Selected destination:', selectedValue);
+                        console.log('Latitude (swapped from API):', latitude);
+                        console.log('Longitude (swapped from API):', longitude);
+                        
                         $('#dest_loc').val(selectedValue);
                         $('#longitude').val(longitude);
                         $('#latitude').val(latitude);
@@ -175,11 +126,42 @@ childAges = (child || '')
 arrival = atob(urlParams.get('arrival') || '');
 departure = atob(urlParams.get('departure') || '');
 // Parse coordinates and ensure they're numbers
-const latitudeStr = atob(urlParams.get('latitude') || '');
-const longitudeStr = atob(urlParams.get('longitude') || '');
-const latitude = parseFloat(latitudeStr) || 40.7128; // Default to NYC if invalid
-const longitude = parseFloat(longitudeStr) || -74.0060; // Default to NYC if invalid
+let latitudeStr = atob(urlParams.get('latitude') || '');
+let longitudeStr = atob(urlParams.get('longitude') || '');
+let latitude = parseFloat(latitudeStr) || 40.7128; // Default to NYC if invalid
+let longitude = parseFloat(longitudeStr) || -74.0060; // Default to NYC if invalid
+
+// IMPORTANT: The API returns coordinates inverted (latitude is actually longitude, longitude is actually latitude)
+// We swap them when creating suggestions, so new URLs should have correct coordinates
+// But old URLs (before the fix) might still have inverted coordinates
+// We detect and swap if coordinates appear to be inverted:
+// - Latitude should be between -90 and 90
+// - Longitude should be between -180 and 180
+// If latitude is outside -90 to 90 but within -180 to 180, and longitude is within -90 to 90, they're inverted
+const latInValidRange = latitude >= -90 && latitude <= 90;
+const latLooksLikeLng = latitude >= -180 && latitude <= 180 && !latInValidRange;
+const lngInValidRange = longitude >= -180 && longitude <= 180;
+const lngLooksLikeLat = longitude >= -90 && longitude <= 90; // Longitude in latitude range means it's actually a latitude
+
+// Swap if they appear to be inverted
+if (latLooksLikeLng && lngLooksLikeLat) {
+    console.warn('Coordinates from URL appear to be inverted. Swapping them...');
+    console.warn('Original from URL - Lat:', latitude, 'Lng:', longitude);
+    const temp = latitude;
+    latitude = longitude;
+    longitude = temp;
+    console.warn('Swapped - Lat:', latitude, 'Lng:', longitude);
+} else {
+    console.log('Coordinates from URL appear to be correct:', latitude, longitude);
+}
+
 const locationCode = atob(urlParams.get('location_code') || '');
+
+// Debug: Log parsed coordinates
+console.log('Parsed coordinates from URL:');
+console.log('  Latitude string:', latitudeStr, '->', latitude);
+console.log('  Longitude string:', longitudeStr, '->', longitude);
+console.log('  Destination:', destLoc);
 
 $('#destination').text(destLoc);
 $('#dest_loc').val(destLoc);
@@ -320,12 +302,6 @@ function fetchHotels(formData) {
             }
             
             renderHotels(hotelsToDisplay);
-            
-            // Update hero image with hotel image if no curated image exists
-            // Use a small delay to ensure DOM is ready
-            setTimeout(function() {
-                updateHeroImage(destLoc, hotelsToDisplay);
-            }, 100);
             
             // Initialize maps if needed
             if (!map && window.innerWidth >= 992) {
@@ -559,10 +535,10 @@ $('#hotel_name').on('input', function (event) {
     }, 500); // 500ms delay to avoid too many API calls
 });
 
-// Initialize Leaflet Map
+// Initialize Google Maps (desktop)
 function initHotelMap() {
-    if (typeof L === 'undefined') {
-        console.log('Leaflet not loaded yet, retrying...');
+    if (typeof google === 'undefined' || typeof google.maps === 'undefined' || typeof google.maps.Map === 'undefined') {
+        console.log('Google Maps not loaded yet, retrying...');
         setTimeout(initHotelMap, 500);
         return;
     }
@@ -575,42 +551,74 @@ function initHotelMap() {
     }
 
     // Use destination coordinates - already parsed as numbers
-    const destLat = latitude;
-    const destLng = longitude;
+    let destLat = latitude;
+    let destLng = longitude;
     
     // Validate coordinates
     if (isNaN(destLat) || isNaN(destLng) || destLat === 0 || destLng === 0) {
         console.error('Invalid coordinates:', destLat, destLng);
+        console.error('Raw latitude string:', latitudeStr);
+        console.error('Raw longitude string:', longitudeStr);
         return;
     }
     
-    console.log('Initializing Leaflet map at:', [destLat, destLng]);
+    // Debug: Log coordinates to verify they're correct
+    console.log('Initializing Google Maps at:', destLat, destLng);
+    console.log('Destination:', destLoc);
+    console.log('Coordinate validation - Latitude:', destLat, 'Longitude:', destLng);
     
-    // Initialize Leaflet map with proper zoom
-    map = L.map(mapElement).setView([destLat, destLng], 13);
+    // Note: Coordinates are already swapped at the API response level (see line 72-73)
+    // The API returns latitude and longitude inverted, so we swap them when reading from the API
     
-    // Add OpenStreetMap tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19
-    }).addTo(map);
+    // Validate coordinate ranges (latitude: -90 to 90, longitude: -180 to 180)
+    if (destLat < -90 || destLat > 90) {
+        console.error('Invalid latitude range:', destLat, 'should be between -90 and 90');
+        return;
+    }
+    if (destLng < -180 || destLng > 180) {
+        console.error('Invalid longitude range:', destLng, 'should be between -180 and 180');
+        return;
+    }
+    
+    // Initialize Google Maps
+    map = new google.maps.Map(mapElement, {
+        center: { lat: destLat, lng: destLng },
+        zoom: 13,
+        mapTypeId: 'roadmap'
+    });
+    
+    // Create custom destination marker icon
+    const destinationIcon = {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 10,
+        fillColor: '#FF0000',
+        fillOpacity: 1,
+        strokeColor: '#FFFFFF',
+        strokeWeight: 2
+    };
     
     // Add a marker for the destination location
-    destinationMarker = L.marker([destLat, destLng], {
-        icon: L.divIcon({
-            className: 'destination-marker',
-            html: '<div style="background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-        })
-    }).addTo(map);
+    destinationMarker = new google.maps.Marker({
+        position: { lat: destLat, lng: destLng },
+        map: map,
+        icon: destinationIcon,
+        title: destLoc || 'Destination'
+    });
     
-    destinationMarker.bindPopup(destLoc || 'Destination').openPopup();
+    // Add info window for destination
+    const destInfoWindow = new google.maps.InfoWindow({
+        content: `<div style="padding: 5px;"><strong>${destLoc || 'Destination'}</strong></div>`
+    });
+    destinationMarker.addListener('click', () => {
+        destInfoWindow.open(map, destinationMarker);
+    });
+    destInfoWindow.open(map, destinationMarker);
 }
 
-// Wait for Leaflet to load and coordinates to be available
-function waitForLeaflet() {
-    if (typeof L !== 'undefined' && latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
+// Wait for Google Maps to load and coordinates to be available
+function waitForGoogleMaps() {
+    if (typeof google !== 'undefined' && typeof google.maps !== 'undefined' && typeof google.maps.Map !== 'undefined' && latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
+        googleMapsLoaded = true;
         // Only initialize desktop map if on desktop
         if (window.innerWidth >= 992) {
             initHotelMap();
@@ -620,72 +628,95 @@ function waitForLeaflet() {
             initHotelMapMobile();
         }
     } else {
-        setTimeout(waitForLeaflet, 100);
+        setTimeout(waitForGoogleMaps, 100);
     }
 }
 
-// Start waiting for Leaflet after coordinates are parsed
+// Start waiting for Google Maps after coordinates are parsed (if not already initialized by callback)
 $(document).ready(function() {
-    // Clear any cached hero image on page load
-    const heroSection = $('.hero-section');
-    if (heroSection.length) {
-        // Force clear background image to prevent caching
-        heroSection.css('background-image', 'none');
-        // Remove any inline style that might be cached
-        const currentBg = heroSection.attr('style');
-        if (currentBg) {
-            // Remove background-image from style attribute
-            const newStyle = currentBg.replace(/background-image[^;]*;?/gi, '');
-            heroSection.attr('style', newStyle);
-        }
+    // Only call waitForGoogleMaps if Google Maps hasn't been loaded via callback
+    if (!googleMapsLoaded) {
+        waitForGoogleMaps();
     }
-    
-    waitForLeaflet();
 });
 
 // Initialize mobile map
 function initHotelMapMobile() {
-    if (typeof L === 'undefined') {
+    if (typeof google === 'undefined' || typeof google.maps === 'undefined' || typeof google.maps.Map === 'undefined') {
+        console.log('Google Maps not loaded yet, retrying...');
         setTimeout(initHotelMapMobile, 500);
         return;
     }
 
     const mapElement = document.getElementById('hotel-map-mobile');
     if (!mapElement) {
+        console.log('Map element not found yet, retrying...');
         setTimeout(initHotelMapMobile, 500);
         return;
     }
 
     // Use destination coordinates - already parsed as numbers
-    const destLat = latitude;
-    const destLng = longitude;
+    let destLat = latitude;
+    let destLng = longitude;
     
     // Validate coordinates
     if (isNaN(destLat) || isNaN(destLng) || destLat === 0 || destLng === 0) {
         console.error('Invalid coordinates:', destLat, destLng);
+        console.error('Raw latitude string:', latitudeStr);
+        console.error('Raw longitude string:', longitudeStr);
         return;
     }
     
-    // Initialize Leaflet map with proper zoom
-    mapMobile = L.map(mapElement).setView([destLat, destLng], 13);
+    // Debug: Log coordinates to verify they're correct
+    console.log('Initializing Mobile Google Maps at:', destLat, destLng);
+    console.log('Destination:', destLoc);
     
-    // Add OpenStreetMap tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19
-    }).addTo(mapMobile);
+    // Note: Coordinates are already swapped at the API response level (see line 72-73)
+    // The API returns latitude and longitude inverted, so we swap them when reading from the API
+    
+    // Validate coordinate ranges (latitude: -90 to 90, longitude: -180 to 180)
+    if (destLat < -90 || destLat > 90) {
+        console.error('Invalid latitude range:', destLat, 'should be between -90 and 90');
+        return;
+    }
+    if (destLng < -180 || destLng > 180) {
+        console.error('Invalid longitude range:', destLng, 'should be between -180 and 180');
+        return;
+    }
+    
+    // Initialize Google Maps
+    mapMobile = new google.maps.Map(mapElement, {
+        center: { lat: destLat, lng: destLng },
+        zoom: 13,
+        mapTypeId: 'roadmap'
+    });
+    
+    // Create custom destination marker icon
+    const destinationIcon = {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 10,
+        fillColor: '#FF0000',
+        fillOpacity: 1,
+        strokeColor: '#FFFFFF',
+        strokeWeight: 2
+    };
     
     // Add destination marker
-    destinationMarkerMobile = L.marker([destLat, destLng], {
-        icon: L.divIcon({
-            className: 'destination-marker',
-            html: '<div style="background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-        })
-    }).addTo(mapMobile);
+    destinationMarkerMobile = new google.maps.Marker({
+        position: { lat: destLat, lng: destLng },
+        map: mapMobile,
+        icon: destinationIcon,
+        title: destLoc || 'Destination'
+    });
     
-    destinationMarkerMobile.bindPopup(destLoc || 'Destination').openPopup();
+    // Add info window for destination
+    const destInfoWindow = new google.maps.InfoWindow({
+        content: `<div style="padding: 5px;"><strong>${destLoc || 'Destination'}</strong></div>`
+    });
+    destinationMarkerMobile.addListener('click', () => {
+        destInfoWindow.open(mapMobile, destinationMarkerMobile);
+    });
+    destInfoWindow.open(mapMobile, destinationMarkerMobile);
 }
 
 // Update mobile map markers
@@ -694,63 +725,83 @@ function updateMapMarkersMobile(hotels) {
         return;
     }
     
-    markersMobile.forEach(marker => mapMobile.removeLayer(marker));
+    // Remove existing markers
+    markersMobile.forEach(marker => marker.setMap(null));
     markersMobile = [];
     
     if (hotels.length === 0) {
-        mapMobile.setView([latitude, longitude], 13);
+        mapMobile.setCenter({ lat: latitude, lng: longitude });
+        mapMobile.setZoom(13);
         return;
     }
     
-    const bounds = [];
+    const bounds = new google.maps.LatLngBounds();
     
     // Add destination to bounds
     if (latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
-        bounds.push([latitude, longitude]);
+        bounds.extend({ lat: latitude, lng: longitude });
     }
     
     hotels.forEach((hotel, index) => {
         if (hotel.geoLocation && hotel.geoLocation.latitude && hotel.geoLocation.longitude) {
             const lat = parseFloat(hotel.geoLocation.latitude);
             const lng = parseFloat(hotel.geoLocation.longitude);
-            const position = [lat, lng];
+            const position = { lat: lat, lng: lng };
             
-            // Create custom marker with number
-            const marker = L.marker(position, {
-                icon: L.divIcon({
-                    className: 'hotel-marker',
-                    html: `<div style="background-color: #0066cc; color: white; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">${index + 1}</div>`,
-                    iconSize: [28, 28],
-                    iconAnchor: [14, 14]
-                })
-            }).addTo(mapMobile);
+            // Create custom marker with number using SVG
+            const svgContent = '<svg width="28" height="28" xmlns="http://www.w3.org/2000/svg">' +
+                '<circle cx="14" cy="14" r="12" fill="#0066cc" stroke="white" stroke-width="2"/>' +
+                '<text x="14" y="18" font-family="Arial" font-size="12" font-weight="bold" fill="white" text-anchor="middle">' + (index + 1) + '</text>' +
+                '</svg>';
+            const markerIcon = {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svgContent),
+                scaledSize: new google.maps.Size(28, 28),
+                anchor: new google.maps.Point(14, 14)
+            };
             
-            const popupContent = `
-                <div style="padding: 10px; max-width: 250px;">
-                    <h6 style="margin: 0 0 5px 0; font-weight: bold;">${hotel.displayName || hotel.name}</h6>
-                    <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">${hotel.city || ''}, ${hotel.state || ''}</p>
-                    ${hotel.starRating ? `<p style="margin: 0 0 5px 0;">${generateStars(hotel.starRating)}</p>` : ''}
-                    <button class="btn btn-sm btn-success mt-2" onclick="window.location.href='#hotel-${index}'">View Details</button>
-                </div>
-            `;
+            // Create marker
+            const marker = new google.maps.Marker({
+                position: position,
+                map: mapMobile,
+                icon: markerIcon,
+                title: hotel.displayName || hotel.name
+            });
             
-            marker.bindPopup(popupContent);
+            // Create info window content
+            const starsHTML = hotel.starRating ? '<p style="margin: 0 0 5px 0;">' + generateStars(hotel.starRating) + '</p>' : '';
+            const popupContent = '<div style="padding: 10px; max-width: 250px;">' +
+                '<h6 style="margin: 0 0 5px 0; font-weight: bold;">' + (hotel.displayName || hotel.name || '') + '</h6>' +
+                '<p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">' + (hotel.city || '') + ', ' + (hotel.state || '') + '</p>' +
+                starsHTML +
+                '<button class="btn btn-sm btn-success mt-2" onclick="window.location.href=\'#hotel-' + index + '\'">View Details</button>' +
+                '</div>';
+            
+            const infoWindow = new google.maps.InfoWindow({
+                content: popupContent
+            });
+            
+            marker.addListener('click', () => {
+                infoWindow.open(mapMobile, marker);
+            });
             
             markersMobile.push(marker);
-            bounds.push(position);
+            bounds.extend(position);
         }
     });
     
-    if (bounds.length > 0) {
-        const group = new L.featureGroup(markersMobile);
+    // Fit bounds to show all markers
+    if (bounds.getNorthEast() && bounds.getSouthWest()) {
         if (destinationMarkerMobile) {
-            group.addLayer(destinationMarkerMobile);
+            bounds.extend(destinationMarkerMobile.getPosition());
         }
-        mapMobile.fitBounds(group.getBounds().pad(0.1));
+        mapMobile.fitBounds(bounds);
         
-        if (mapMobile.getZoom() > 15) {
-            mapMobile.setZoom(15);
-        }
+        // Ensure minimum zoom level
+        google.maps.event.addListenerOnce(mapMobile, 'bounds_changed', () => {
+            if (mapMobile.getZoom() > 15) {
+                mapMobile.setZoom(15);
+            }
+        });
     }
 }
 
@@ -830,8 +881,6 @@ function filterHotelsByStars(selectedStars) {
     if (selectedStars.length === 0) {
         // Show all hotels if no filter selected
         renderHotels(allHotels);
-        // Update hero image
-        updateHeroImage(destLoc, allHotels);
         if (window.innerWidth >= 992) {
             if (map) {
                 updateMapMarkers(allHotels);
@@ -860,8 +909,6 @@ function filterHotelsByStars(selectedStars) {
     });
     
     renderHotels(filteredHotels);
-    // Update hero image with filtered hotels
-    updateHeroImage(destLoc, filteredHotels);
     if (window.innerWidth >= 992) {
         if (map) {
             updateMapMarkers(filteredHotels);
@@ -890,68 +937,84 @@ function updateMapMarkers(hotels) {
         return;
     }
     
-    // Clear existing markers (except destination marker)
-    markers.forEach(marker => map.removeLayer(marker));
+    // Remove existing markers
+    markers.forEach(marker => marker.setMap(null));
     markers = [];
     
     if (hotels.length === 0) {
         // If no hotels, just center on destination
-        map.setView([latitude, longitude], 13);
+        map.setCenter({ lat: latitude, lng: longitude });
+        map.setZoom(13);
         return;
     }
     
-    const bounds = [];
+    const bounds = new google.maps.LatLngBounds();
     
     // Add destination to bounds
     if (latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
-        bounds.push([latitude, longitude]);
+        bounds.extend({ lat: latitude, lng: longitude });
     }
     
     hotels.forEach((hotel, index) => {
         if (hotel.geoLocation && hotel.geoLocation.latitude && hotel.geoLocation.longitude) {
             const lat = parseFloat(hotel.geoLocation.latitude);
             const lng = parseFloat(hotel.geoLocation.longitude);
-            const position = [lat, lng];
+            const position = { lat: lat, lng: lng };
             
-            // Create custom marker with number
-            const marker = L.marker(position, {
-                icon: L.divIcon({
-                    className: 'hotel-marker',
-                    html: `<div style="background-color: #0066cc; color: white; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">${index + 1}</div>`,
-                    iconSize: [28, 28],
-                    iconAnchor: [14, 14]
-                })
-            }).addTo(map);
+            // Create custom marker with number using SVG
+            const svgContent = '<svg width="28" height="28" xmlns="http://www.w3.org/2000/svg">' +
+                '<circle cx="14" cy="14" r="12" fill="#0066cc" stroke="white" stroke-width="2"/>' +
+                '<text x="14" y="18" font-family="Arial" font-size="12" font-weight="bold" fill="white" text-anchor="middle">' + (index + 1) + '</text>' +
+                '</svg>';
+            const markerIcon = {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svgContent),
+                scaledSize: new google.maps.Size(28, 28),
+                anchor: new google.maps.Point(14, 14)
+            };
             
-            // Popup content
-            const popupContent = `
-                <div style="padding: 10px; max-width: 250px;">
-                    <h6 style="margin: 0 0 5px 0; font-weight: bold;">${hotel.displayName || hotel.name}</h6>
-                    <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">${hotel.city || ''}, ${hotel.state || ''}</p>
-                    ${hotel.starRating ? `<p style="margin: 0 0 5px 0;">${generateStars(hotel.starRating)}</p>` : ''}
-                    <button class="btn btn-sm btn-success mt-2" onclick="window.location.href='#hotel-${index}'">View Details</button>
-                </div>
-            `;
+            // Create marker
+            const marker = new google.maps.Marker({
+                position: position,
+                map: map,
+                icon: markerIcon,
+                title: hotel.displayName || hotel.name
+            });
             
-            marker.bindPopup(popupContent);
+            // Create info window content
+            const starsHTML = hotel.starRating ? '<p style="margin: 0 0 5px 0;">' + generateStars(hotel.starRating) + '</p>' : '';
+            const popupContent = '<div style="padding: 10px; max-width: 250px;">' +
+                '<h6 style="margin: 0 0 5px 0; font-weight: bold;">' + (hotel.displayName || hotel.name || '') + '</h6>' +
+                '<p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">' + (hotel.city || '') + ', ' + (hotel.state || '') + '</p>' +
+                starsHTML +
+                '<button class="btn btn-sm btn-success mt-2" onclick="window.location.href=\'#hotel-' + index + '\'">View Details</button>' +
+                '</div>';
+            
+            const infoWindow = new google.maps.InfoWindow({
+                content: popupContent
+            });
+            
+            marker.addListener('click', () => {
+                infoWindow.open(map, marker);
+            });
             
             markers.push(marker);
-            bounds.push(position);
+            bounds.extend(position);
         }
     });
     
-    // Fit map to show all markers and destination
-    if (bounds.length > 0) {
-        const group = new L.featureGroup(markers);
+    // Fit bounds to show all markers
+    if (bounds.getNorthEast() && bounds.getSouthWest()) {
         if (destinationMarker) {
-            group.addLayer(destinationMarker);
+            bounds.extend(destinationMarker.getPosition());
         }
-        map.fitBounds(group.getBounds().pad(0.1));
+        map.fitBounds(bounds);
         
         // Ensure minimum zoom level
-        if (map.getZoom() > 15) {
-            map.setZoom(15);
-        }
+        google.maps.event.addListenerOnce(map, 'bounds_changed', () => {
+            if (map.getZoom() > 15) {
+                map.setZoom(15);
+            }
+        });
     }
 }
 

@@ -7,75 +7,24 @@ require 'api_auth.php';
 $destLoc = isset($_GET['dest_loc']) ? base64_decode($_GET['dest_loc']) : '';
 $city = explode(',', $destLoc)[0] ?? '';
 $city = trim($city);
-
-// Hero image mapping for top destinations
-$heroImageMap = [
-    // Nevada
-    'Las Vegas' => 'vegas.jpg',
-    
-    // Florida
-    'Orlando' => 'orlando.jpg',
-    'Miami' => 'miami.jpg',
-    'Miami Beach' => 'miami.jpg',
-    
-    // South Carolina
-    'Myrtle Beach' => 'myrtle-beach.jpg',
-    
-    // Missouri
-    'Branson' => 'branson.jpg',
-    
-    // Add more as you download images
-];
-
-// Get hero image or use default
-$heroImage = 'assets/images/heros/default.jpg'; // Default fallback
-
-if (isset($heroImageMap[$city])) {
-    $mappedImage = 'assets/images/heros/' . $heroImageMap[$city];
-    // Check if file actually exists
-    if (file_exists(__DIR__ . '/' . $mappedImage)) {
-        // Add cache-busting parameter based on file modification time
-        $fileModTime = filemtime(__DIR__ . '/' . $mappedImage);
-        $heroImage = $mappedImage . '?v=' . $fileModTime;
-    }
-} else {
-    // Add cache-busting for default image too
-    $defaultPath = __DIR__ . '/assets/images/heros/default.jpg';
-    if (file_exists($defaultPath)) {
-        $fileModTime = filemtime($defaultPath);
-        $heroImage = 'assets/images/heros/default.jpg?v=' . $fileModTime;
-    }
-}
 ?>
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<!-- Google Maps CSS (optional, for default styling) -->
 <style>
-    /* Ensure Leaflet map container displays correctly */
+    /* Ensure Google Maps container displays correctly */
     #hotel-map, #hotel-map-mobile {
         z-index: 1;
+        height: 100%;
     }
-    .leaflet-container {
-        font-family: inherit;
+    .gm-style .gm-style-iw-c { /* Google Maps InfoWindow styling */
+        padding: 0;
+    }
+    .gm-style .gm-style-iw-d {
+        overflow: hidden !important;
     }
 </style>
 <?php require "inc/header.php"; ?>
 
 <main>
-    <section class="pt-0">
-        <div class="container-fluid hero-section" 
-             style="background-image:url(<?php echo $heroImage; ?>); background-position: center left; background-size: cover; min-height: 300px;"
-             data-destination="<?php echo htmlspecialchars($city); ?>"
-             data-hero-image="<?php echo htmlspecialchars($heroImage); ?>"
-             data-cache-bust="<?php echo time(); ?>">
-            <div class="row">
-                <div class="col-md-8 mx-auto text-start pt-7 pb-5">
-                    <h1 class="text-white fw-light">Destinations: <span class="fw-bold" id="destination"></span></h1>
-                    <p class="lead text-white">Our nightly destination pricing is unbeatable!</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <section class="pt-0 pb-4">
         <div class="container-fluid px-4 position-relative">
 
@@ -372,8 +321,20 @@ if (isset($heroImageMap[$city])) {
 
 <?php include "inc/footer.php";
 ?>
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Google Maps API -->
+<script>
+    // Declare initGoogleMaps globally before the API script loads
+    window.initGoogleMaps = function() {
+        console.log("Google Maps JavaScript API loaded.");
+        // Call the function from hotel-list.js to initialize maps
+        if (typeof waitForGoogleMaps === 'function') {
+            waitForGoogleMaps();
+        } else {
+            console.error("waitForGoogleMaps function not found in hotel-list.js");
+        }
+    };
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBJ0HmlpsmNj9SWN98j9PTnzA4fSC8TMUk&callback=initGoogleMaps&loading=async" async defer></script>
 <script src="assets/js/frontend/hotel-list.js"></script>
 <script>
 $(document).ready(function() {

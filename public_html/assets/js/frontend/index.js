@@ -31,7 +31,11 @@ let destination = {
 
                             if (response.locations && response.locations.length > 0) {
                                 $.each(response.locations, function (index, value) {
-                                    suggestions += `<li class="suggestion-item" value="${value.code}" longitude="${value.geoLocation.longitude}" latitude="${value.geoLocation.latitude}">${value.name}</li>`;
+                                    // API returns latitude and longitude inverted, so swap them
+                                    // API's "latitude" is actually longitude, and API's "longitude" is actually latitude
+                                    const actualLatitude = value.geoLocation.longitude; // API's longitude is actual latitude
+                                    const actualLongitude = value.geoLocation.latitude; // API's latitude is actual longitude
+                                    suggestions += `<li class="suggestion-item" value="${value.code}" longitude="${actualLongitude}" latitude="${actualLatitude}">${value.name}</li>`;
                                 });
                             } else {
                                 // Show fallback if no results
