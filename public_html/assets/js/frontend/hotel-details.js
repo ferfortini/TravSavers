@@ -13,6 +13,18 @@ $(document).ready(function () {
         const roomName = $(this).data('room-name');
         const packageId = $(this).data('package-id');
 
+        // Check if guest form data already exists (from search results lead capture)
+        const existingGuestData = localStorage.getItem('guestFormData');
+        if (existingGuestData) {
+            // Guest data already captured, proceed directly to booking
+            const guestData = JSON.parse(existingGuestData);
+            guestData.room_id = roomId;
+            guestData.package_id = packageId;
+            localStorage.setItem('guestFormData', JSON.stringify(guestData));
+            window.location.href = 'booking.php';
+            return;
+        }
+
         // Set the room ID in the modal's hidden input
         $('#room_id').val(roomId);
         $('#package_id').val(packageId);

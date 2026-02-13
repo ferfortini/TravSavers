@@ -1,6 +1,8 @@
 <?php
 include "./inc/db_connect.php";
 include('api_auth.php');
+header('Content-Type: application/json');
+
 $experience = $_POST['experience'] ?? '';
 $destinationId = $_POST['destination_id'] ?? '';
 $destination_name = explode(', ', $_POST['destination_name'] ?? '');
@@ -8,6 +10,10 @@ $city = $destination_name[0] ?? '';
 $state = $destination_name[1] ?? '';
 $arrival = $_POST['checkIn'] ?? '';
 $departure = $_POST['checkOut'] ?? '';
+// Handle "null" string from URL
+if ($departure === 'null' || $departure === '') {
+    $departure = '';
+}
 
 $destinationList = [
     'Las Vegas, NV' => 94511,
@@ -156,8 +162,10 @@ switch ($price) {
 
     default:
         // Handle default case when no specific price is selected
-        if (!$departure) {
+        // RESTORED original logic but with FIXED JSON handling for location_id
+        if (!$departure || $departure === 'null') {
             // Normal single destination mode
+            // FIX: Use JSON_CONTAINS instead of direct join since location_id is JSON
             $sql = "
                 SELECT p.*, 
                        h.name AS hotel_name, h.city AS hotel_city, h.state AS hotel_state,
@@ -165,58 +173,126 @@ switch ($price) {
                        (p.preview_rate * p.nights) AS total_cost
                 FROM packages p
                 LEFT JOIN hotels h ON p.hotel_id = h.id
-                LEFT JOIN custom_locations cl ON p.location_id = cl.id
+                LEFT JOIN custom_locations cl ON JSON_CONTAINS(p.location_id, JSON_QUOTE(CAST(cl.id AS CHAR)))
                 WHERE p.status = 1
                   AND p.experience_id = ?
                   AND (
                         (cl.city IS NOT NULL AND cl.city LIKE ?)
-                        OR (p.location_id IS NULL AND h.city LIKE ?)
+                        OR (p.location_id IS NULL AND p.hotel_id IS NOT NULL AND h.city LIKE ?)
                       )
-                ";
+                ORDER BY total_cost DESC
+            ";
 
             $stmt = $con->prepare($sql);
-            $cityParam = '%' . $city . '%';
-            $stmt->bind_param('iss', $experience, $cityParam, $cityParam);
-        }
-
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        while ($row = $result->fetch_assoc()) {
-            if (strtolower($row['use_hotel_api']) === 'no') {
-                $row['name'] = $row['hotel_name'] ?? '';
-                $row['city'] = $row['location_city'] ?? $row['hotel_city'] ?? '';
-                $row['state'] = $row['location_state'] ?? $row['hotel_state'] ?? '';
-                $row['arrival'] = $arrival;
-                $row['departure'] = date('Y-m-d', strtotime($arrival . ' + ' . $row['nights'] . ' days'));
-
-                $packages[] = $row;
+            if ($stmt) {
+                $cityParam = '%' . $city . '%';
+                $stmt->bind_param('iss', $experience, $cityParam, $cityParam);
+                $stmt->execute();
+                $result = $stmt->get_result();
             } else {
-                $packages[] = [
-                    'id' => $row['id'],
-                    'use_hotel_api' => 'Yes',
-                    'hotel_id' => $row['hotel_id'],
-                    'package_title' => $row['package_title'],
-                    'include_perks' => $row['include_perks'],
-                    'nights' => $row['nights'],
-                    'preview_rate' => $row['preview_rate'],
-                    'everyday_rate' => $row['everyday_rate'],
-                    'destination_id' => $row['location_id'],
-                    'city' => $row['location_city'] ?? $row['hotel_city'] ?? '',
-                    'state' => $row['location_state'] ?? $row['hotel_state'] ?? '',
-                    'checkOut' => (!empty($arrival) && !empty($row['nights']))
-                        ? date('Y-m-d', strtotime($arrival . ' + ' . $row['nights'] . ' days'))
-                        : null
-                ];
+                $result = null;
+            }
+        } else {
+            // Has departure - use same logic
+            $sql = "
+                SELECT p.*, 
+                       h.name AS hotel_name, h.city AS hotel_city, h.state AS hotel_state,
+                       cl.city AS location_city, cl.state AS location_state,
+                       (p.preview_rate * p.nights) AS total_cost
+                FROM packages p
+                LEFT JOIN hotels h ON p.hotel_id = h.id
+                LEFT JOIN custom_locations cl ON JSON_CONTAINS(p.location_id, JSON_QUOTE(CAST(cl.id AS CHAR)))
+                WHERE p.status = 1
+                  AND p.experience_id = ?
+                  AND (
+                        (cl.city IS NOT NULL AND cl.city LIKE ?)
+                        OR (p.location_id IS NULL AND p.hotel_id IS NOT NULL AND h.city LIKE ?)
+                      )
+                ORDER BY total_cost DESC
+            ";
+
+            $stmt = $con->prepare($sql);
+            if ($stmt) {
+                $cityParam = '%' . $city . '%';
+                $stmt->bind_param('iss', $experience, $cityParam, $cityParam);
+                $stmt->execute();
+                $result = $stmt->get_result();
+            } else {
+                $result = null;
             }
         }
+
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                if (strtolower($row['use_hotel_api']) === 'no') {
+                    $row['name'] = $row['hotel_name'] ?? '';
+                    $row['city'] = $row['location_city'] ?? $row['hotel_city'] ?? '';
+                    $row['state'] = $row['location_state'] ?? $row['hotel_state'] ?? '';
+                    $row['arrival'] = $arrival;
+                    $row['departure'] = date('Y-m-d', strtotime($arrival . ' + ' . $row['nights'] . ' days'));
+
+                    $packages[] = $row;
+                } else {
+                    $packages[] = [
+                        'id' => $row['id'],
+                        'use_hotel_api' => 'Yes',
+                        'hotel_id' => $row['hotel_id'],
+                        'package_title' => $row['package_title'],
+                        'include_perks' => $row['include_perks'],
+                        'nights' => $row['nights'],
+                        'preview_rate' => $row['preview_rate'],
+                        'everyday_rate' => $row['everyday_rate'],
+                        'destination_id' => $row['location_id'],
+                        'city' => $row['location_city'] ?? $row['hotel_city'] ?? '',
+                        'state' => $row['location_state'] ?? $row['hotel_state'] ?? '',
+                        'checkOut' => (!empty($arrival) && !empty($row['nights']))
+                            ? date('Y-m-d', strtotime($arrival . ' + ' . $row['nights'] . ' days'))
+                            : null
+                    ];
+                }
+            }
+        }
+        break;
 }
 
+// Debug: Check if we have packages and what might be wrong
+$debug = [];
+if (count($packages) === 0 && !empty($experience)) {
+    // Test query to see if packages exist for this experience
+    $testQuery = "SELECT COUNT(*) as total FROM packages WHERE status = 1 AND experience_id = ?";
+    $testStmt = $con->prepare($testQuery);
+    if ($testStmt) {
+        $testStmt->bind_param('i', $experience);
+        $testStmt->execute();
+        $testResult = $testStmt->get_result();
+        $testRow = $testResult->fetch_assoc();
+        $debug['total_packages_for_experience'] = $testRow['total'] ?? 0;
+        $testStmt->close();
+    }
+    
+    // Check total published packages
+    $testQuery2 = "SELECT COUNT(*) as total FROM packages WHERE status = 1";
+    $testResult2 = $con->query($testQuery2);
+    if ($testResult2) {
+        $testRow2 = $testResult2->fetch_assoc();
+        $debug['total_published_packages'] = $testRow2['total'] ?? 0;
+    }
+    
+    $debug['experience_id'] = $experience;
+    $debug['city'] = $city;
+    $debug['state'] = $state;
+}
 
-
-echo json_encode([
+$response = [
     'data' => array_values($packages),
     'count' => count($packages),
     'page' => 1,
     'pageSize' => 10
-]);
+];
+
+// Add debug info if no packages found (temporary for debugging)
+if (count($packages) === 0 && !empty($debug)) {
+    $response['debug'] = $debug;
+}
+
+echo json_encode($response);

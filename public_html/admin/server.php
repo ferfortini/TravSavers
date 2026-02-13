@@ -156,6 +156,7 @@ if ($table === 'packages') {
             CONCAT('[', 
                 GROUP_CONCAT(DISTINCT CONCAT('\"', custom_locations.id, '\"') SEPARATOR ','), 
             ']') AS location,
+            GROUP_CONCAT(DISTINCT CONCAT(custom_locations.city, ', ', custom_locations.state) SEPARATOR '; ') AS location_names,
             GROUP_CONCAT(DISTINCT hotels.name) AS hotel_name,
             nr.value AS additional_night_rate
         FROM packages p

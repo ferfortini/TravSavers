@@ -1,7 +1,83 @@
 let arrival, departure, adults, childAges = [];
 let allHotels = []; // Store all hotels for filtering
-let map = null; // Google Maps instance
+let map = null; // Leaflet map instance (desktop)
+let mapMobile = null; // Leaflet map instance (mobile)
 let markers = []; // Store map markers
+let markersMobile = []; // Store map markers (mobile)
+let destinationMarker = null; // Destination marker
+let destinationMarkerMobile = null; // Destination marker (mobile)
+
+// Update hero image dynamically if no curated image exists
+function updateHeroImage(destination, hotels) {
+    const heroSection = $('.hero-section');
+    if (!heroSection.length) {
+        console.log('Hero section not found');
+        return;
+    }
+    
+    // Check current background image
+    const currentBg = heroSection.css('background-image');
+    const dataHeroImage = heroSection.data('hero-image') || '';
+    
+    // List of curated image filenames (don't override these)
+    const curatedImages = ['miami.jpg', 'vegas.jpg', 'orlando.jpg', 'myrtle-beach.jpg', 'branson.jpg'];
+    const hasCuratedImage = curatedImages.some(img => {
+        return (currentBg && currentBg.includes(img)) || (dataHeroImage && dataHeroImage.includes(img));
+    });
+    
+    // Only update if we don't have a curated image (i.e., using default.jpg or no image)
+    if (hasCuratedImage) {
+        console.log('Curated hero image already set, skipping hotel image fallback');
+        return;
+    }
+    
+    // Only use hotel image if current image is default or missing
+    if (currentBg && !currentBg.includes('default.jpg') && currentBg !== 'none' && !currentBg.includes('url("")')) {
+        console.log('Hero image already set (not default), skipping update');
+        return;
+    }
+    
+    // Try to use hotel image if available (better than default or missing images)
+    if (hotels && hotels.length > 0) {
+        // Try to get hotel image - check multiple possible structures
+        let hotelImage = null;
+        const firstHotel = hotels[0];
+        
+        if (firstHotel.images && firstHotel.images.length > 0 && firstHotel.images[0].url) {
+            hotelImage = firstHotel.images[0].url;
+        } else if (firstHotel.image) {
+            hotelImage = firstHotel.image;
+        } else if (firstHotel.imageUrl) {
+            hotelImage = firstHotel.imageUrl;
+        }
+        
+        if (hotelImage) {
+            // Add cache-busting parameter to prevent browser caching
+            // Use both timestamp and random number for maximum cache-busting
+            const separator = hotelImage.includes('?') ? '&' : '?';
+            const timestamp = Date.now();
+            const random = Math.floor(Math.random() * 1000000);
+            const cacheBuster = `_t=${timestamp}&_r=${random}`;
+            const imageUrl = `${hotelImage}${separator}${cacheBuster}`;
+            
+            // Force browser to reload by creating new image object
+            const img = new Image();
+            img.onload = function() {
+                // Set background image only after image is loaded
+                heroSection.css('background-image', `url("${imageUrl}")`);
+                console.log('Updated hero image from hotel API (cache-busted):', imageUrl);
+            };
+            img.onerror = function() {
+                console.log('Failed to load hotel image:', imageUrl);
+            };
+            img.src = imageUrl;
+        } else {
+            console.log('No hotel image available in hotel data:', firstHotel);
+        }
+    } else {
+        console.log('No hotels available for hero image');
+    }
+}
 
 // Define utility functions at the top level
 function showSkeletonLoaders(count = 3) {
@@ -88,19 +164,22 @@ $('#dest_loc').on('input', function () {
 });
 
 const urlParams = new URLSearchParams(window.location.search);
-const destLoc = atob(urlParams.get('dest_loc'));
-const hotelName = atob(urlParams.get('hotel_name'));
-adults = parseInt(atob(urlParams.get('adults')));
-const child = atob(urlParams.get('child'));
+const destLoc = atob(urlParams.get('dest_loc') || '');
+const hotelName = atob(urlParams.get('hotel_name') || '');
+adults = parseInt(atob(urlParams.get('adults') || ''));
+const child = atob(urlParams.get('child') || '');
 childAges = (child || '')
     .split(',')
     .map(age => parseInt(age))
     .filter(age => !isNaN(age) && age >= 0);
-arrival = atob(urlParams.get('arrival'));
-departure = atob(urlParams.get('departure'));
-const latitude = atob(urlParams.get('latitude'));
-const longitude = atob(urlParams.get('longitude'));
-const locationCode = atob(urlParams.get('location_code'));
+arrival = atob(urlParams.get('arrival') || '');
+departure = atob(urlParams.get('departure') || '');
+// Parse coordinates and ensure they're numbers
+const latitudeStr = atob(urlParams.get('latitude') || '');
+const longitudeStr = atob(urlParams.get('longitude') || '');
+const latitude = parseFloat(latitudeStr) || 40.7128; // Default to NYC if invalid
+const longitude = parseFloat(longitudeStr) || -74.0060; // Default to NYC if invalid
+const locationCode = atob(urlParams.get('location_code') || '');
 
 $('#destination').text(destLoc);
 $('#dest_loc').val(destLoc);
@@ -242,20 +321,38 @@ function fetchHotels(formData) {
             
             renderHotels(hotelsToDisplay);
             
-            // Always update map (it's always visible on the right)
-            if (!map) {
+            // Update hero image with hotel image if no curated image exists
+            // Use a small delay to ensure DOM is ready
+            setTimeout(function() {
+                updateHeroImage(destLoc, hotelsToDisplay);
+            }, 100);
+            
+            // Initialize maps if needed
+            if (!map && window.innerWidth >= 992) {
                 initHotelMap();
+            }
+            if (!mapMobile && window.innerWidth < 992) {
+                initHotelMapMobile();
             }
             
             // Wait a bit for map to initialize, then update markers
             setTimeout(function() {
-                if (map) {
+                if (map && window.innerWidth >= 992) {
                     updateMapMarkers(hotelsToDisplay);
+                } else if (mapMobile && window.innerWidth < 992) {
+                    updateMapMarkersMobile(hotelsToDisplay);
                 } else {
                     // Retry if map not ready
-                    initHotelMap();
-                    if (map) {
-                        updateMapMarkers(hotelsToDisplay);
+                    if (window.innerWidth >= 992) {
+                        initHotelMap();
+                        if (map) {
+                            updateMapMarkers(hotelsToDisplay);
+                        }
+                    } else {
+                        initHotelMapMobile();
+                        if (mapMobile) {
+                            updateMapMarkersMobile(hotelsToDisplay);
+                        }
                     }
                 }
             }, 500);
@@ -308,8 +405,11 @@ function fetchHotels(formData) {
                     kidsAges: kidsAges
                 };
 
+                // Store hotel data for later use
                 localStorage.setItem('selectedHotel', JSON.stringify(selectedData));
-                window.location.href = 'hotel-detail.php';
+                
+                // Show lead capture modal instead of redirecting
+                $('#guestModal').modal('show');
             });
             
             const totalHotelsForPagination = response.counters.totalFilteredHotels;
@@ -421,6 +521,10 @@ $('#sort').on('change', function (event) {
     event.preventDefault();
     const sortingValue = $(this).val();
     
+    if (!sortingValue || sortingValue === '') {
+        return; // Don't sort if no value selected
+    }
+    
     // Store current star filter selections before sorting
     const selectedStars = $('.star-filter:checked').map(function() {
         return parseInt($(this).val());
@@ -455,81 +559,260 @@ $('#hotel_name').on('input', function (event) {
     }, 500); // 500ms delay to avoid too many API calls
 });
 
-// Initialize Google Map
+// Initialize Leaflet Map
 function initHotelMap() {
-    if (typeof google === 'undefined' || !google.maps) {
-        console.error('Google Maps API not loaded');
-        // Retry after a short delay
+    if (typeof L === 'undefined') {
+        console.log('Leaflet not loaded yet, retrying...');
         setTimeout(initHotelMap, 500);
         return;
     }
 
     const mapElement = document.getElementById('hotel-map');
     if (!mapElement) {
-        // Map element not found yet, retry
+        console.log('Map element not found yet, retrying...');
         setTimeout(initHotelMap, 500);
         return;
     }
 
-    // Default center (will be updated when hotels are loaded)
-    const defaultCenter = { lat: parseFloat(latitude) || 40.7128, lng: parseFloat(longitude) || -74.0060 };
+    // Use destination coordinates - already parsed as numbers
+    const destLat = latitude;
+    const destLng = longitude;
     
-    map = new google.maps.Map(mapElement, {
-        zoom: 12,
-        center: defaultCenter,
-        mapTypeControl: true,
-        streetViewControl: false,
-        fullscreenControl: true
-    });
+    // Validate coordinates
+    if (isNaN(destLat) || isNaN(destLng) || destLat === 0 || destLng === 0) {
+        console.error('Invalid coordinates:', destLat, destLng);
+        return;
+    }
+    
+    console.log('Initializing Leaflet map at:', [destLat, destLng]);
+    
+    // Initialize Leaflet map with proper zoom
+    map = L.map(mapElement).setView([destLat, destLng], 13);
+    
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }).addTo(map);
+    
+    // Add a marker for the destination location
+    destinationMarker = L.marker([destLat, destLng], {
+        icon: L.divIcon({
+            className: 'destination-marker',
+            html: '<div style="background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        })
+    }).addTo(map);
+    
+    destinationMarker.bindPopup(destLoc || 'Destination').openPopup();
 }
 
-// Initialize map when Google Maps API is loaded
-if (typeof google !== 'undefined' && google.maps) {
-    initHotelMap();
-} else {
-    // Wait for Google Maps to load
-    window.addEventListener('load', function() {
-        if (typeof google !== 'undefined' && google.maps) {
+// Wait for Leaflet to load and coordinates to be available
+function waitForLeaflet() {
+    if (typeof L !== 'undefined' && latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
+        // Only initialize desktop map if on desktop
+        if (window.innerWidth >= 992) {
             initHotelMap();
         }
-    });
+        // Only initialize mobile map if on mobile and map view is selected
+        if (window.innerWidth < 992 && $('input[name="viewMode"]:checked').val() === 'map') {
+            initHotelMapMobile();
+        }
+    } else {
+        setTimeout(waitForLeaflet, 100);
+    }
 }
 
-// View Toggle (List/Map) - Map is always visible on right, this toggles list view
-$('input[name="viewMode"]').on('change', function() {
-    const viewMode = $(this).val();
+// Start waiting for Leaflet after coordinates are parsed
+$(document).ready(function() {
+    // Clear any cached hero image on page load
+    const heroSection = $('.hero-section');
+    if (heroSection.length) {
+        // Force clear background image to prevent caching
+        heroSection.css('background-image', 'none');
+        // Remove any inline style that might be cached
+        const currentBg = heroSection.attr('style');
+        if (currentBg) {
+            // Remove background-image from style attribute
+            const newStyle = currentBg.replace(/background-image[^;]*;?/gi, '');
+            heroSection.attr('style', newStyle);
+        }
+    }
     
-    if (viewMode === 'map') {
-        // Hide list, show only map (full width)
-        $('#results-column').addClass('d-none');
-        $('#map-column').removeClass('col-lg-12 col-xl-3').addClass('col-12');
-        $('#filters-sidebar').removeClass('col-lg-3 col-xl-2').addClass('col-lg-3');
+    waitForLeaflet();
+});
+
+// Initialize mobile map
+function initHotelMapMobile() {
+    if (typeof L === 'undefined') {
+        setTimeout(initHotelMapMobile, 500);
+        return;
+    }
+
+    const mapElement = document.getElementById('hotel-map-mobile');
+    if (!mapElement) {
+        setTimeout(initHotelMapMobile, 500);
+        return;
+    }
+
+    // Use destination coordinates - already parsed as numbers
+    const destLat = latitude;
+    const destLng = longitude;
+    
+    // Validate coordinates
+    if (isNaN(destLat) || isNaN(destLng) || destLat === 0 || destLng === 0) {
+        console.error('Invalid coordinates:', destLat, destLng);
+        return;
+    }
+    
+    // Initialize Leaflet map with proper zoom
+    mapMobile = L.map(mapElement).setView([destLat, destLng], 13);
+    
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }).addTo(mapMobile);
+    
+    // Add destination marker
+    destinationMarkerMobile = L.marker([destLat, destLng], {
+        icon: L.divIcon({
+            className: 'destination-marker',
+            html: '<div style="background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        })
+    }).addTo(mapMobile);
+    
+    destinationMarkerMobile.bindPopup(destLoc || 'Destination').openPopup();
+}
+
+// Update mobile map markers
+function updateMapMarkersMobile(hotels) {
+    if (!mapMobile) {
+        return;
+    }
+    
+    markersMobile.forEach(marker => mapMobile.removeLayer(marker));
+    markersMobile = [];
+    
+    if (hotels.length === 0) {
+        mapMobile.setView([latitude, longitude], 13);
+        return;
+    }
+    
+    const bounds = [];
+    
+    // Add destination to bounds
+    if (latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
+        bounds.push([latitude, longitude]);
+    }
+    
+    hotels.forEach((hotel, index) => {
+        if (hotel.geoLocation && hotel.geoLocation.latitude && hotel.geoLocation.longitude) {
+            const lat = parseFloat(hotel.geoLocation.latitude);
+            const lng = parseFloat(hotel.geoLocation.longitude);
+            const position = [lat, lng];
+            
+            // Create custom marker with number
+            const marker = L.marker(position, {
+                icon: L.divIcon({
+                    className: 'hotel-marker',
+                    html: `<div style="background-color: #0066cc; color: white; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">${index + 1}</div>`,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                })
+            }).addTo(mapMobile);
+            
+            const popupContent = `
+                <div style="padding: 10px; max-width: 250px;">
+                    <h6 style="margin: 0 0 5px 0; font-weight: bold;">${hotel.displayName || hotel.name}</h6>
+                    <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">${hotel.city || ''}, ${hotel.state || ''}</p>
+                    ${hotel.starRating ? `<p style="margin: 0 0 5px 0;">${generateStars(hotel.starRating)}</p>` : ''}
+                    <button class="btn btn-sm btn-success mt-2" onclick="window.location.href='#hotel-${index}'">View Details</button>
+                </div>
+            `;
+            
+            marker.bindPopup(popupContent);
+            
+            markersMobile.push(marker);
+            bounds.push(position);
+        }
+    });
+    
+    if (bounds.length > 0) {
+        const group = new L.featureGroup(markersMobile);
+        if (destinationMarkerMobile) {
+            group.addLayer(destinationMarkerMobile);
+        }
+        mapMobile.fitBounds(group.getBounds().pad(0.1));
         
-        // Initialize map if not already initialized
+        if (mapMobile.getZoom() > 15) {
+            mapMobile.setZoom(15);
+        }
+    }
+}
+
+// Handle window resize - reinitialize maps if needed
+$(window).on('resize', function() {
+    if (window.innerWidth >= 992) {
+        // Desktop: show desktop map, hide mobile map
+        $('#map-column-desktop').removeClass('d-none');
+        $('#map-column-mobile').hide();
         if (!map) {
             initHotelMap();
         }
-        
-        // Update map with current hotels
-        if (map && allHotels.length > 0) {
-            const selectedStars = $('.star-filter:checked').map(function() {
-                return parseInt($(this).val());
-            }).get();
-            
-            let hotelsToDisplay = allHotels;
-            if (selectedStars.length > 0) {
-                hotelsToDisplay = allHotels.filter(hotel => {
-                    const hotelStars = hotel.starRating || 0;
-                    return selectedStars.some(star => hotelStars >= star);
-                });
-            }
-            updateMapMarkers(hotelsToDisplay);
-        }
     } else {
-        // Show list and map side by side
-        $('#results-column').removeClass('d-none');
-        $('#map-column').removeClass('col-12').addClass('col-lg-12 col-xl-3');
-        $('#filters-sidebar').removeClass('col-lg-3').addClass('col-lg-3 col-xl-2');
+        // Mobile: hide desktop map
+        $('#map-column-desktop').addClass('d-none');
+        if ($('input[name="viewMode"]:checked').val() === 'map') {
+            $('#map-column-mobile').show();
+            if (!mapMobile) {
+                initHotelMapMobile();
+            }
+        }
+    }
+});
+
+// View Toggle (List/Map) - Mobile only
+$('input[name="viewMode"]').on('change', function() {
+    const viewMode = $(this).val();
+    
+    // Only apply on mobile (desktop always shows both)
+    if (window.innerWidth < 992) {
+        if (viewMode === 'map') {
+            // Hide list and filters, show only map
+            $('#results-column').addClass('d-none');
+            $('#filters-sidebar').addClass('d-none');
+            $('#map-column-mobile').show();
+            
+            // Initialize mobile map if not already initialized
+            if (!mapMobile) {
+                initHotelMapMobile();
+            }
+            
+            // Update map with current hotels
+            if (mapMobile && allHotels.length > 0) {
+                const selectedStars = $('.star-filter:checked').map(function() {
+                    return parseInt($(this).val());
+                }).get();
+                
+                let hotelsToDisplay = allHotels;
+                if (selectedStars.length > 0) {
+                    hotelsToDisplay = allHotels.filter(hotel => {
+                        const hotelStars = hotel.starRating || 0;
+                        return selectedStars.some(star => hotelStars >= star);
+                    });
+                }
+                updateMapMarkersMobile(hotelsToDisplay);
+            }
+        } else {
+            // Show list and filters, hide map
+            $('#results-column').removeClass('d-none');
+            $('#filters-sidebar').removeClass('d-none');
+            $('#map-column-mobile').hide();
+        }
     }
 });
 
@@ -547,14 +830,26 @@ function filterHotelsByStars(selectedStars) {
     if (selectedStars.length === 0) {
         // Show all hotels if no filter selected
         renderHotels(allHotels);
-        if (map) {
-            updateMapMarkers(allHotels);
+        // Update hero image
+        updateHeroImage(destLoc, allHotels);
+        if (window.innerWidth >= 992) {
+            if (map) {
+                updateMapMarkers(allHotels);
+            } else {
+                initHotelMap();
+                setTimeout(function() {
+                    if (map) updateMapMarkers(allHotels);
+                }, 500);
+            }
         } else {
-            // Initialize map if not ready
-            initHotelMap();
-            setTimeout(function() {
-                if (map) updateMapMarkers(allHotels);
-            }, 500);
+            if (mapMobile) {
+                updateMapMarkersMobile(allHotels);
+            } else {
+                initHotelMapMobile();
+                setTimeout(function() {
+                    if (mapMobile) updateMapMarkersMobile(allHotels);
+                }, 500);
+            }
         }
         return;
     }
@@ -565,72 +860,97 @@ function filterHotelsByStars(selectedStars) {
     });
     
     renderHotels(filteredHotels);
-    if (map) {
-        updateMapMarkers(filteredHotels);
+    // Update hero image with filtered hotels
+    updateHeroImage(destLoc, filteredHotels);
+    if (window.innerWidth >= 992) {
+        if (map) {
+            updateMapMarkers(filteredHotels);
+        } else {
+            initHotelMap();
+            setTimeout(function() {
+                if (map) updateMapMarkers(filteredHotels);
+            }, 500);
+        }
     } else {
-        // Initialize map if not ready
-        initHotelMap();
-        setTimeout(function() {
-            if (map) updateMapMarkers(filteredHotels);
-        }, 500);
+        if (mapMobile) {
+            updateMapMarkersMobile(filteredHotels);
+        } else {
+            initHotelMapMobile();
+            setTimeout(function() {
+                if (mapMobile) updateMapMarkersMobile(filteredHotels);
+            }, 500);
+        }
     }
 }
 
 // Update map markers
 function updateMapMarkers(hotels) {
-    // Clear existing markers
-    markers.forEach(marker => marker.setMap(null));
+    if (!map) {
+        console.log('Map not initialized yet, cannot update markers');
+        return;
+    }
+    
+    // Clear existing markers (except destination marker)
+    markers.forEach(marker => map.removeLayer(marker));
     markers = [];
     
-    if (hotels.length === 0) return;
+    if (hotels.length === 0) {
+        // If no hotels, just center on destination
+        map.setView([latitude, longitude], 13);
+        return;
+    }
     
-    const bounds = new google.maps.LatLngBounds();
+    const bounds = [];
+    
+    // Add destination to bounds
+    if (latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
+        bounds.push([latitude, longitude]);
+    }
     
     hotels.forEach((hotel, index) => {
         if (hotel.geoLocation && hotel.geoLocation.latitude && hotel.geoLocation.longitude) {
-            const position = {
-                lat: parseFloat(hotel.geoLocation.latitude),
-                lng: parseFloat(hotel.geoLocation.longitude)
-            };
+            const lat = parseFloat(hotel.geoLocation.latitude);
+            const lng = parseFloat(hotel.geoLocation.longitude);
+            const position = [lat, lng];
             
-            const marker = new google.maps.Marker({
-                position: position,
-                map: map,
-                title: hotel.name,
-                label: {
-                    text: (index + 1).toString(),
-                    color: 'white',
-                    fontWeight: 'bold'
-                }
-            });
+            // Create custom marker with number
+            const marker = L.marker(position, {
+                icon: L.divIcon({
+                    className: 'hotel-marker',
+                    html: `<div style="background-color: #0066cc; color: white; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">${index + 1}</div>`,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                })
+            }).addTo(map);
             
-            // Info window
-            const infoWindow = new google.maps.InfoWindow({
-                content: `
-                    <div style="padding: 10px; max-width: 250px;">
-                        <h6 style="margin: 0 0 5px 0; font-weight: bold;">${hotel.name}</h6>
-                        <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">${hotel.city || ''}, ${hotel.state || ''}</p>
-                        ${hotel.starRating ? `<p style="margin: 0 0 5px 0;">${generateStars(hotel.starRating)}</p>` : ''}
-                        <button class="btn btn-sm btn-success mt-2" onclick="window.location.href='#hotel-${index}'">View Details</button>
-                    </div>
-                `
-            });
+            // Popup content
+            const popupContent = `
+                <div style="padding: 10px; max-width: 250px;">
+                    <h6 style="margin: 0 0 5px 0; font-weight: bold;">${hotel.displayName || hotel.name}</h6>
+                    <p style="margin: 0 0 5px 0; font-size: 12px; color: #666;">${hotel.city || ''}, ${hotel.state || ''}</p>
+                    ${hotel.starRating ? `<p style="margin: 0 0 5px 0;">${generateStars(hotel.starRating)}</p>` : ''}
+                    <button class="btn btn-sm btn-success mt-2" onclick="window.location.href='#hotel-${index}'">View Details</button>
+                </div>
+            `;
             
-            marker.addListener('click', function() {
-                infoWindow.open(map, marker);
-            });
+            marker.bindPopup(popupContent);
             
             markers.push(marker);
-            bounds.extend(position);
+            bounds.push(position);
         }
     });
     
-    // Fit map to show all markers
-    if (markers.length > 0) {
-        map.fitBounds(bounds);
-        // Don't zoom in too much if only one marker
-        if (markers.length === 1) {
-            map.setZoom(14);
+    // Fit map to show all markers and destination
+    if (bounds.length > 0) {
+        const group = new L.featureGroup(markers);
+        if (destinationMarker) {
+            group.addLayer(destinationMarker);
+        }
+        map.fitBounds(group.getBounds().pad(0.1));
+        
+        // Ensure minimum zoom level
+        if (map.getZoom() > 15) {
+            map.setZoom(15);
         }
     }
 }

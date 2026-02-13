@@ -5,9 +5,64 @@ include_once 'api_auth.php';
 $page = "home";
 $title = "Book Online in No Time!";
 include "inc/header.php";
+// Include common functions for image path handling
+include "admin/common.php";
 $experiences = mysqli_query($con, "SELECT * FROM experiences ORDER BY id DESC");
 $destinations = mysqli_query($con, "SELECT * FROM custom_locations ORDER BY id DESC");
 ?>
+<style>
+    #featuredPackagesCarousel {
+        position: relative;
+    }
+    #featuredPackagesCarousel .carousel-control-prev,
+    #featuredPackagesCarousel .carousel-control-next {
+        width: 50px;
+        height: 50px;
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 50%;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0.8;
+    }
+    #featuredPackagesCarousel .carousel-control-prev:hover,
+    #featuredPackagesCarousel .carousel-control-next:hover {
+        opacity: 1;
+        background-color: rgba(0, 0, 0, 0.7);
+    }
+    #featuredPackagesCarousel .carousel-control-prev {
+        left: -25px;
+    }
+    #featuredPackagesCarousel .carousel-control-next {
+        right: -25px;
+    }
+    #featuredPackagesCarousel .carousel-indicators {
+        margin-bottom: -30px;
+    }
+    #featuredPackagesCarousel .carousel-indicators button {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: rgba(0, 0, 0, 0.3);
+        border: 2px solid transparent;
+    }
+    #featuredPackagesCarousel .carousel-indicators button.active {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    @media (max-width: 768px) {
+        #featuredPackagesCarousel .carousel-control-prev,
+        #featuredPackagesCarousel .carousel-control-next {
+            width: 40px;
+            height: 40px;
+        }
+        #featuredPackagesCarousel .carousel-control-prev {
+            left: -15px;
+        }
+        #featuredPackagesCarousel .carousel-control-next {
+            right: -15px;
+        }
+    }
+</style>
 <main>
 
     <section class="pt-0">
@@ -335,87 +390,176 @@ $destinations = mysqli_query($con, "SELECT * FROM custom_locations ORDER BY id D
                     <p class="text-muted">Discover our most popular destinations</p>
                 </div>
             </div>
-            <div class="row g-4">
-                <!-- Punta Cana -->
-                <div class="col-sm-6 col-md-3">
-                    <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
-                        <div class="position-relative" style="height: 250px; overflow: hidden;">
-                            <img src="https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&h=600&fit=crop" 
-                                 class="card-img-top w-100 h-100" 
-                                 style="object-fit: cover; transition: transform 0.3s ease;" 
-                                 alt="Punta Cana"
-                                 onmouseover="this.style.transform='scale(1.1)'"
-                                 onmouseout="this.style.transform='scale(1)'">
-                            <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
-                                <h5 class="text-white mb-0 fw-bold">Punta Cana</h5>
+            <?php
+            // Fetch featured packages (published packages with images, limit to 8)
+            $featuredPackagesQuery = "
+                SELECT 
+                    p.id,
+                    p.package_title,
+                    p.description,
+                    p.preview_rate,
+                    p.everyday_rate,
+                    p.nights,
+                    p.image,
+                    p.location_id,
+                    p.experience_id,
+                    GROUP_CONCAT(DISTINCT CONCAT(cl.city, ', ', cl.state) SEPARATOR '; ') AS location_names
+                FROM packages p
+                LEFT JOIN custom_locations cl ON JSON_CONTAINS(p.location_id, JSON_QUOTE(CAST(cl.id AS CHAR)))
+                WHERE p.status = 1 
+                    AND p.image IS NOT NULL 
+                    AND p.image != ''
+                GROUP BY p.id
+                ORDER BY p.published_at DESC, p.id DESC
+                LIMIT 8
+            ";
+            $featuredPackagesResult = mysqli_query($con, $featuredPackagesQuery);
+            $featuredPackages = [];
+            if ($featuredPackagesResult) {
+                while ($row = mysqli_fetch_assoc($featuredPackagesResult)) {
+                    $featuredPackages[] = $row;
+                }
+            }
+            
+            if (count($featuredPackages) > 0):
+                // Group packages into slides (4 per slide)
+                $packagesPerSlide = 4;
+                $totalSlides = ceil(count($featuredPackages) / $packagesPerSlide);
+            ?>
+            <div id="featuredPackagesCarousel" class="carousel slide" data-bs-ride="carousel" data-bs-interval="5000">
+                <?php if ($totalSlides > 1): ?>
+                <div class="carousel-indicators">
+                    <?php for ($ind = 0; $ind < $totalSlides; $ind++): ?>
+                    <button type="button" data-bs-target="#featuredPackagesCarousel" data-bs-slide-to="<?php echo $ind; ?>" <?php echo $ind === 0 ? 'class="active" aria-current="true"' : ''; ?> aria-label="Slide <?php echo $ind + 1; ?>"></button>
+                    <?php endfor; ?>
+                </div>
+                <?php endif; ?>
+                <div class="carousel-inner">
+                    <?php
+                    
+                    for ($slideIndex = 0; $slideIndex < $totalSlides; $slideIndex++):
+                        $isActive = $slideIndex === 0 ? 'active' : '';
+                    ?>
+                    <div class="carousel-item <?php echo $isActive; ?>">
+                        <div class="row g-4">
+                            <?php
+                            $startIndex = $slideIndex * $packagesPerSlide;
+                            $endIndex = min($startIndex + $packagesPerSlide, count($featuredPackages));
+                            
+                            for ($i = $startIndex; $i < $endIndex; $i++):
+                                $package = $featuredPackages[$i];
+                                
+                                // Handle image path - images are stored as filenames in the database
+                                $rawImage = $package['image'] ?? '';
+                                
+                                if (!empty($rawImage)) {
+                                    // Check if it's already a full URL
+                                    if (strpos($rawImage, 'http') === 0) {
+                                        $imageUrl = $rawImage;
+                                    } 
+                                    // Check if it already has a path separator (might be stored with path)
+                                    elseif (strpos($rawImage, '/') !== false || strpos($rawImage, '\\') !== false) {
+                                        // If it starts with /, use as is, otherwise prepend /
+                                        $imageUrl = (strpos($rawImage, '/') === 0) ? $rawImage : '/' . ltrim($rawImage, '/');
+                                    } 
+                                    // Just a filename - construct the path
+                                    else {
+                                        $imageUrl = '/admin/uploads/' . $rawImage;
+                                    }
+                                } else {
+                                    $imageUrl = '/assets/images/heros/default.jpg';
+                                }
+                                
+                                $locationName = !empty($package['location_names']) 
+                                    ? explode('; ', $package['location_names'])[0] 
+                                    : 'Explore Destination';
+                                
+                                // Build proper search URL with base64 encoded parameters
+                                // Destination ID map (matching the JavaScript)
+                                $destinationIdMap = [
+                                    'Las Vegas, NV' => 94511,
+                                    'Orlando, FL' => 34467,
+                                    'Miami, FL' => 28632,
+                                    'Myrtle Beach, SC' => 145014,
+                                    'Gatlinburg, TN' => 150747,
+                                    'Pigeon Forge, TN' => 151709,
+                                    'Hilton Head, SC' => 144760,
+                                    'Branson, MO' => 87419,
+                                    'Virginia Beach, VA' => 171657,
+                                    'Park City, UT' => 163309
+                                ];
+                                
+                                // Get destination ID if location matches
+                                $destinationId = $destinationIdMap[$locationName] ?? null;
+                                $experienceId = $package['experience_id'] ?? '';
+                                
+                                // Default date (today + 7 days for check-in, +10 days for check-out)
+                                $defaultCheckIn = date('Y-m-d', strtotime('+7 days'));
+                                $defaultAdults = 2;
+                                
+                                // Build URL with base64 encoded parameters
+                                if ($experienceId && $destinationId) {
+                                    $packageUrl = 'search-package.php?' . http_build_query([
+                                        'experience' => base64_encode($experienceId),
+                                        'destination_id' => base64_encode($destinationId),
+                                        'destination_name' => base64_encode($locationName),
+                                        'checkIn' => base64_encode($defaultCheckIn),
+                                        'adults' => base64_encode($defaultAdults),
+                                        'child' => ''
+                                    ]);
+                                } else {
+                                    // Fallback: link to home page package search tab
+                                    $packageUrl = 'index.php#packages';
+                                }
+                            ?>
+                            <div class="col-sm-6 col-md-3">
+                                <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
+                                    <div class="position-relative" style="height: 250px; overflow: hidden;">
+                                        <img src="<?php echo htmlspecialchars($imageUrl); ?>" 
+                                             onerror="this.src='/assets/images/heros/default.jpg';" 
+                                             class="card-img-top w-100 h-100" 
+                                             style="object-fit: cover; transition: transform 0.3s ease;" 
+                                             alt="<?php echo htmlspecialchars($package['package_title']); ?>"
+                                             onmouseover="this.style.transform='scale(1.1)'"
+                                             onmouseout="this.style.transform='scale(1)'">
+                                        <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
+                                            <h5 class="text-white mb-0 fw-bold"><?php echo htmlspecialchars($package['package_title']); ?></h5>
+                                            <?php if (!empty($locationName)): ?>
+                                            <small class="text-white-50"><?php echo htmlspecialchars($locationName); ?></small>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <div class="card-body text-center p-3">
+                                        <div class="mb-2">
+                                            <span class="text-primary fw-bold fs-5">$<?php echo number_format($package['preview_rate']); ?></span>
+                                            <small class="text-muted d-block"><?php echo $package['nights']; ?> night<?php echo $package['nights'] > 1 ? 's' : ''; ?></small>
+                                        </div>
+                                        <a href="<?php echo $packageUrl; ?>" class="btn btn-primary btn-sm w-100">Explore Packages</a>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="card-body text-center p-3">
-                            <a href="search-package.php?destination=Punta+Cana" class="btn btn-primary btn-sm w-100">Explore Packages</a>
+                            <?php endfor; ?>
                         </div>
                     </div>
+                    <?php endfor; ?>
                 </div>
-
-                <!-- Branson Missouri -->
-                <div class="col-sm-6 col-md-3">
-                    <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
-                        <div class="position-relative" style="height: 250px; overflow: hidden;">
-                            <img src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&h=600&fit=crop" 
-                                 class="card-img-top w-100 h-100" 
-                                 style="object-fit: cover; transition: transform 0.3s ease;" 
-                                 alt="Branson Missouri"
-                                 onmouseover="this.style.transform='scale(1.1)'"
-                                 onmouseout="this.style.transform='scale(1)'">
-                            <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
-                                <h5 class="text-white mb-0 fw-bold">Branson, Missouri</h5>
-                            </div>
-                        </div>
-                        <div class="card-body text-center p-3">
-                            <a href="search-package.php?destination=Branson+Missouri" class="btn btn-primary btn-sm w-100">Explore Packages</a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Las Vegas -->
-                <div class="col-sm-6 col-md-3">
-                    <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
-                        <div class="position-relative" style="height: 250px; overflow: hidden;">
-                            <img src="assets/images/heros/vegas.jpg" 
-                                 class="card-img-top w-100 h-100" 
-                                 style="object-fit: cover; transition: transform 0.3s ease;" 
-                                 alt="Las Vegas"
-                                 onmouseover="this.style.transform='scale(1.1)'"
-                                 onmouseout="this.style.transform='scale(1)'">
-                            <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
-                                <h5 class="text-white mb-0 fw-bold">Las Vegas</h5>
-                            </div>
-                        </div>
-                        <div class="card-body text-center p-3">
-                            <a href="search-package.php?destination=Las+Vegas" class="btn btn-primary btn-sm w-100">Explore Packages</a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Napa Valley -->
-                <div class="col-sm-6 col-md-3">
-                    <div class="card shadow-sm h-100 overflow-hidden position-relative" style="border: none; border-radius: 12px;">
-                        <div class="position-relative" style="height: 250px; overflow: hidden;">
-                            <img src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=800&h=600&fit=crop" 
-                                 class="card-img-top w-100 h-100" 
-                                 style="object-fit: cover; transition: transform 0.3s ease;" 
-                                 alt="Napa Valley"
-                                 onmouseover="this.style.transform='scale(1.1)'"
-                                 onmouseout="this.style.transform='scale(1)'">
-                            <div class="position-absolute bottom-0 start-0 end-0 p-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
-                                <h5 class="text-white mb-0 fw-bold">Napa Valley</h5>
-                            </div>
-                        </div>
-                        <div class="card-body text-center p-3">
-                            <a href="search-package.php?destination=Napa+Valley" class="btn btn-primary btn-sm w-100">Explore Packages</a>
-                        </div>
-                    </div>
-                </div>
+                
+                <?php if ($totalSlides > 1): ?>
+                <button class="carousel-control-prev" type="button" data-bs-target="#featuredPackagesCarousel" data-bs-slide="prev">
+                    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Previous</span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#featuredPackagesCarousel" data-bs-slide="next">
+                    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                    <span class="visually-hidden">Next</span>
+                </button>
+                <?php endif; ?>
             </div>
+            <?php else: ?>
+            <div class="alert alert-info text-center">
+                <p class="mb-0">No featured packages available at the moment. Check back soon!</p>
+            </div>
+            <?php endif; ?>
         </div>
     </section>
 

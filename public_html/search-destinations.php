@@ -2,12 +2,71 @@
 $page = "destination-search";
 $title = "Book Online in No Time!";
 require 'api_auth.php';
-require "inc/header.php";
+
+// Get destination from URL
+$destLoc = isset($_GET['dest_loc']) ? base64_decode($_GET['dest_loc']) : '';
+$city = explode(',', $destLoc)[0] ?? '';
+$city = trim($city);
+
+// Hero image mapping for top destinations
+$heroImageMap = [
+    // Nevada
+    'Las Vegas' => 'vegas.jpg',
+    
+    // Florida
+    'Orlando' => 'orlando.jpg',
+    'Miami' => 'miami.jpg',
+    'Miami Beach' => 'miami.jpg',
+    
+    // South Carolina
+    'Myrtle Beach' => 'myrtle-beach.jpg',
+    
+    // Missouri
+    'Branson' => 'branson.jpg',
+    
+    // Add more as you download images
+];
+
+// Get hero image or use default
+$heroImage = 'assets/images/heros/default.jpg'; // Default fallback
+
+if (isset($heroImageMap[$city])) {
+    $mappedImage = 'assets/images/heros/' . $heroImageMap[$city];
+    // Check if file actually exists
+    if (file_exists(__DIR__ . '/' . $mappedImage)) {
+        // Add cache-busting parameter based on file modification time
+        $fileModTime = filemtime(__DIR__ . '/' . $mappedImage);
+        $heroImage = $mappedImage . '?v=' . $fileModTime;
+    }
+} else {
+    // Add cache-busting for default image too
+    $defaultPath = __DIR__ . '/assets/images/heros/default.jpg';
+    if (file_exists($defaultPath)) {
+        $fileModTime = filemtime($defaultPath);
+        $heroImage = 'assets/images/heros/default.jpg?v=' . $fileModTime;
+    }
+}
 ?>
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+    /* Ensure Leaflet map container displays correctly */
+    #hotel-map, #hotel-map-mobile {
+        z-index: 1;
+    }
+    .leaflet-container {
+        font-family: inherit;
+    }
+</style>
+<?php require "inc/header.php"; ?>
 
 <main>
     <section class="pt-0">
-        <div class="container-fluid" style="background-image:url(assets/images/heros/orlando.jpg); background-position: center left; background-size: cover;">
+        <div class="container-fluid hero-section" 
+             style="background-image:url(<?php echo $heroImage; ?>); background-position: center left; background-size: cover; min-height: 300px;"
+             data-destination="<?php echo htmlspecialchars($city); ?>"
+             data-hero-image="<?php echo htmlspecialchars($heroImage); ?>"
+             data-cache-bust="<?php echo time(); ?>">
             <div class="row">
                 <div class="col-md-8 mx-auto text-start pt-7 pb-5">
                     <h1 class="text-white fw-light">Destinations: <span class="fw-bold" id="destination"></span></h1>
@@ -19,42 +78,6 @@ require "inc/header.php";
 
     <section class="pt-0 pb-4">
         <div class="container-fluid px-4 position-relative">
-
-            <div class="row">
-                <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <input type="checkbox" class="btn-check" id="btn-check-soft">
-                        <label class="btn btn-primary-soft btn-primary-check mb-0" for="btn-check-soft" data-bs-toggle="collapse" data-bs-target="#collapseFilter" aria-controls="collapseFilter">
-                            <i class="bi fa-fe bi-search me-2"></i>Edit Search
-                        </label>
-
-                        <div class="d-flex gap-2 align-items-center">
-                            <div class="btn-group" role="group">
-                                <input type="radio" class="btn-check" name="viewMode" id="viewList" value="list" checked>
-                                <label class="btn btn-outline-primary" for="viewList">
-                                    <i class="bi bi-list-ul me-1"></i>List
-                                </label>
-                                <input type="radio" class="btn-check" name="viewMode" id="viewMap" value="map">
-                                <label class="btn btn-outline-primary" for="viewMap">
-                                    <i class="bi bi-map me-1"></i>Map
-                                </label>
-                            </div>
-
-                            <div class="col-2">
-                                <div class="form-control-borderless">
-                                    <select class="form-select js-choice" id="sort" name="sort" data-search-enabled="false">
-                                        <option selected disabled>Sort Results</option>
-                                        <option value="BiggestSavings">Best Savings</option>
-                                        <option value="PriceAsc">Price (Low to High)</option>
-                                        <option value="PriceDesc">Price (High to Low)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
 
             <!-- Edit Search -->
             <div class="collapse" id="collapseFilter">
@@ -204,12 +227,45 @@ require "inc/header.php";
 
                 <!-- Results Column -->
                 <div class="col-lg-9 col-xl-7" id="results-column">
+                    <!-- Controls at edges of results area -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <input type="checkbox" class="btn-check" id="btn-check-soft">
+                        <label class="btn btn-primary-soft btn-primary-check mb-0" for="btn-check-soft" data-bs-toggle="collapse" data-bs-target="#collapseFilter" aria-controls="collapseFilter">
+                            <i class="bi fa-fe bi-search me-2"></i>Edit Search
+                        </label>
+
+                        <div class="d-flex gap-2 align-items-center">
+                            <!-- Mobile toggle (hidden on desktop) -->
+                            <div class="btn-group d-lg-none" role="group">
+                                <input type="radio" class="btn-check" name="viewMode" id="viewList" value="list" checked>
+                                <label class="btn btn-outline-primary" for="viewList">
+                                    <i class="bi bi-list-ul me-1"></i>List
+                                </label>
+                                <input type="radio" class="btn-check" name="viewMode" id="viewMap" value="map">
+                                <label class="btn btn-outline-primary" for="viewMap">
+                                    <i class="bi bi-map me-1"></i>Map
+                                </label>
+                            </div>
+
+                            <div class="col-auto">
+                                <div class="form-control-borderless">
+                                    <select class="form-select" id="sort" name="sort" style="min-width: 180px;">
+                                        <option value="" selected disabled>Sort Results</option>
+                                        <option value="BiggestSavings">Best Savings</option>
+                                        <option value="PriceAsc">Price (Low to High)</option>
+                                        <option value="PriceDesc">Price (High to Low)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="vstack gap-4" id="hotel-results">
                     </div>
                 </div>
 
-                <!-- Map Column - Always visible on the right -->
-                <div class="col-lg-12 col-xl-3" id="map-column">
+                <!-- Map Column - Always visible on desktop, toggle on mobile -->
+                <div class="col-lg-12 col-xl-3 d-none d-lg-block" id="map-column-desktop">
                     <div class="card shadow-sm sticky-top" style="top: 20px;">
                         <div class="card-header bg-light">
                             <h5 class="mb-0">Map View</h5>
@@ -219,14 +275,149 @@ require "inc/header.php";
                         </div>
                     </div>
                 </div>
+                
+                <!-- Map Column - Mobile view (toggle) -->
+                <div class="col-12 d-lg-none" id="map-column-mobile" style="display: none;">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">Map View</h5>
+                        </div>
+                        <div class="card-body p-0">
+                            <div id="hotel-map-mobile" style="height: 500px; width: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 
+    <!-- Lead Capture Modal -->
+    <div class="modal fade" id="guestModal" tabindex="-1" role="dialog" aria-labelledby="guestModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header position-relative">
+                    <h5 class="modal-title" id="exampleModalLabel">Guest Details</h5>
+                    <div role="button" class="close position-absolute" data-bs-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <form class="row g-4" id="guest-form" method="post">
+                        <div class="col-12">
+                            <div class="bg-light rounded-2 px-4 py-3">
+                                <h6 class="mb-0">Primary Guest</h6>
+                            </div>
+                        </div>
+                        <input type="hidden" name="room_id" id="room_id" value="">
+                        <input type="hidden" name="booking_type" id="booking_type" value="hotel">
+                        <input type="hidden" name="package_id" id="package_id" value="">
+                        <div class="col-md-6">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control form-control-lg" placeholder="First Name"
+                                name="fname" id="fname">
+                            <div class="invalid-feedback" id="fname-error"></div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control form-control-lg" placeholder="Last Name" name="lname"
+                                id="lname">
+                            <div class="invalid-feedback" id="lname-error"></div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label req">Email</label>
+                            <input type="email" class="form-control form-control-lg" placeholder="Valid email address"
+                                name="email" id="email">
+                            <div class="invalid-feedback" id="email-error"></div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label req">Mobile number</label>
+                            <input type="text" class="form-control form-control-lg" id="mobile_no" name="mobile"
+                                placeholder="Enter your mobile number" value="">
+                            <div class="invalid-feedback" id="mobile_no-error"></div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label for="zip" class="form-label req">Postal Code</label>
+                            <input type="text" class="form-control form-control-lg" name="zip" id="zip"
+                                placeholder="Postal Code">
+                            <div class="invalid-feedback" id="zip-error"></div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check form-switch form-check-md d-flex justify-content-between">
+                                <input class="form-check-input flex-shrink-0" name="checkPrivacy1" type="checkbox"
+                                    id="checkPrivacy1">
+                                <label class="form-check-label ps-2 pe-0 small" for="checkPrivacy1">I agree to be
+                                    contacted by phone or email regarding this reservation (details). Your reservation
+                                    request will not be finalized until we can confirm your reservation details with you
+                                    via phone</label>
+                            </div>
+                            <div class="invalid-feedback" id="checkPrivacy1-error"></div>
+                        </div>
+                        <div class="modal-footer border-0">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button class="btn btn-success" type="submit" name="reservation_submit">Next<i class="bi bi-chevron-double-right"></i></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </main>
 
 <?php include "inc/footer.php";
 ?>
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAy1L4SogCeS9kwHHK8n_0LKVGCtcDwUs4&libraries=places" async defer></script>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="assets/js/frontend/hotel-list.js"></script>
+<script>
+$(document).ready(function() {
+    // Guest form validation and submission (for lead capture from search results)
+    $('#guest-form').on('submit', function (e) {
+        e.preventDefault();
+
+        // Perform field validations
+        const isValid = [
+            validateInput($('#fname'), $('#fname-error'), 'Please enter first name'),
+            validateInput($('#lname'), $('#lname-error'), 'Please enter last name'),
+            validateInput($('#email'), $('#email-error'), 'Please enter email'),
+            validateInput($('#mobile_no'), $('#mobile_no-error'), 'Please enter mobile number', { numeric: true, digitsBetween: [6, 13] }),
+            validateInput($('#zip'), $('#zip-error'), 'Please enter postal code'),
+            validateCheckobox($('#checkPrivacy1'), $('#checkPrivacy1-error'), 'Please check privacy policy')
+        ];
+
+        if (!isValid.includes(false)) {
+            const guestFormData = {
+                room_id: $('#room_id').val() || '',
+                package_id: $('#package_id').val() || '',
+                fname: $('#fname').val(),
+                lname: $('#lname').val(),
+                email: $('#email').val(),
+                mobile: $('#mobile_no').val(),
+                zip: $('#zip').val(),
+                checkPrivacy1: $('#checkPrivacy1').is(':checked'),
+                booking_type: $('#booking_type').val() || 'hotel'
+            };
+            
+            // Save guest form data to localStorage
+            localStorage.setItem('guestFormData', JSON.stringify(guestFormData));
+            
+            // Hide modal and redirect to hotel detail page
+            $('#guestModal').modal('hide');
+            window.location.href = 'hotel-detail.php';
+        }
+    });
+
+    // Reset form when modal is closed
+    $('#guestModal').on('hidden.bs.modal', function () {
+        $('#guest-form')[0].reset();
+        $('.form-control').removeClass('is-invalid');
+        $('.invalid-feedback').text('');
+    });
+});
+</script>
